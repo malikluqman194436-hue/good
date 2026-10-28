@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sky Car</title>
+<style>
+:root{--bg:#1a1c22;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a1c22;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1a1c22;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;overscroll-behavior:none;user-select:none;-webkit-user-select:none;touch-action:none}
+canvas{display:block;aspect-ratio:9/16;height:auto;width:min(100%,calc((100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) * 9 / 16));touch-action:none}
+</style>
+</head>
+<body>
+<canvas id="c" width="360" height="640"></canvas>
+<script>
+(()=>{
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=360,H=640,CX=100;
+
+// Tuning constants
+const START_SPEED = 100, MAX_SPEED = 300, SPEED_GROWTH_DIVISOR = 110;
+const GRAVITY = 950, THRUST = 1500, MAX_V = 300;
+
+// Level Layout constants
+const LEVEL_LENGTH = 1000; // 1000 distance units = 100 score points
+const ROAD_TOP = 400; // Road platform top surface at y = 400
+const START_ROAD_START = -50, START_ROAD_END = 470; // 520 px long
+const TUNNEL_START_X = 650; // open gap before tunnel
+const TUNNEL_END_X = TUNNEL_START_X + LEVEL_LENGTH; // 1650
+const FINISH_OPEN_GAP = 300; // post-tunnel open gap ~300 px
+const FINISH_ROAD_X = TUNNEL_END_X + FINISH_OPEN_GAP; // 1950
+const FINISH_ROAD_LEN = 520;
+const FINISH_ROAD_END = FINISH_ROAD_X + FINISH_ROAD_LEN; // 2470
+
+const THEMES = [
+  {name:'Steel Foundry',s:'#9aa0a8',t:[145,158,172],glow:'#cbe0ff',accent:'#78a4d4'},
+  {name:'Toxic Jungle',s:'#35b04a',t:[90,175,115],glow:'#7bff91',accent:'#45d65d'},
+  {name:'Molten Caldera',s:'#d8403a',t:[195,95,85],glow:'#ff7b73',accent:'#ff5544'}
+];
+
+const SPIKE_COLORS = [
+  {small:'#767c85',medium:'#9da4af',big:'#f0f4f8'},
+  {small:'#247a34',medium:'#36b84c',big:'#7bff91'},
+  {small:'#9e2b26',medium:'#da3f37',big:'#ff7b73'}
+];
+
+// Game State: 'ready', 'play', 'level_complete', 'dead'
+let st = 'ready';
+let curLevel = 1;
+let cam = 0, vy = 0, cy = ROAD_TOP + 8, hold = false;
+let segs = [], nextX = 0, lastC = H / 2, parts = [], deadAt = 0, last = 0;
+let best = 0;
+let wheelRot = 0;
+
+// Finish ease-down & celebration state
+let stopping = false;
+let stopTimer = 0;
+let levelCompleteTimer = 0;
+let confettis = [];
+
+try { best = +localStorage.getItem('skycarBest') || 0 } catch(e) {}
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+function getDifficultyDistance() {
+  const distInTunnel = Math.max(0, Math.min(LEVEL_LENGTH, (cam + CX) - TUNNEL_START_X));
+  return (curLevel - 1) * LEVEL_LENGTH + distInTunnel;
+}
+
+const speed = () => Math.min(MAX_SPEED, START_SPEED + getDifficultyDistance() / SPEED_GROWTH_DIVISOR);
+
+// Atmospheric floating mist & smoke particles
+const atmoParts = [];
+for (let i = 0; i < 26; i++) {
+  atmoParts.push({ x: rnd(0, W), y: rnd(0, H), vx: rnd(-18, -6), vy: rnd(-6, 6), size: rnd(2, 4.5), phase: rnd(0, 6.28) });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  if (w < 2 * r) r = w / 2;
+  if (h < 2 * r) r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function pickClusterSize(d, z) {
+  let pBig = Math.min(0.4, d / 30000);
+  if (z === 1) pBig += 0.08;
+  else if (z === 2) pBig += 0.16;
+  pBig = Math.max(0, Math.min(0.5, pBig));
+  const r = Math.random();
+  if (r < pBig) return 'big';
+  const pMed = Math.min(0.65, 0.4 + (d / 40000));
+  if (r < pBig + (1 - pBig) * pMed) return 'medium';
+  return 'small';
+}
+
+function pickSpikeType(z) {
+  const r = Math.random();
+  if (z === 0) {
+    if (r < 0.4) return 'cone';
+    if (r < 0.75) return 'fork';
+    return 'saw';
+  } else if (z === 1) {
+    if (r < 0.5) return 'thorn';
+    if (r < 0.8) return 'claw';
+    return 'cone';
+  } else {
+    if (r < 0.45) return 'crystal';
+    if (r < 0.8) return 'jagged';
+    return 'cone';
+  }
+}
+
+function makeSpikes(len, d, z, top, bot, noSpikes = false) {
+  const count = Math.ceil(len / 12);
+  const heights = { small: 12, medium: 22, big: 36 };
+  function gen() {
+    const list = [];
+    let i = 0;
+    while (i < count) {
+      const cLen = Math.min(count - i, Math.floor(rnd(2, 6)));
+      const size = pickClusterSize(d, z);
+      const type = pickSpikeType(z);
+      const h = noSpikes ? 0 : heights[size];
+      for (let k = 0; k < cLen; k++) list.push({ h, size, type });
+      i += cLen;
+    }
+    return list;
+  }
+  const topSpikes = gen();
+  const botSpikes = gen();
+  const maxSpikeSum = (bot - top + 36) - 120;
+  for (let i = 0; i < count; i++) {
+    if (topSpikes[i].h + botSpikes[i].h > maxSpikeSum) {
+      if (topSpikes[i].h >= botSpikes[i].h) {
+        if (22 + botSpikes[i].h <= maxSpikeSum) { topSpikes[i].h = 22; topSpikes[i].size = 'medium'; }
+        else { topSpikes[i].h = 12; topSpikes[i].size = 'small'; }
+      } else {
+        if (topSpikes[i].h + 22 <= maxSpikeSum) { botSpikes[i].h = 22; botSpikes[i].size = 'medium'; }
+        else { botSpikes[i].h = 12; botSpikes[i].size = 'small'; }
+      }
+    }
+  }
+  return { topSpikes, botSpikes };
+}
+
+function addSeg(isOpen = false, forceLen) {
+  const segDistInTunnel = Math.max(0, Math.min(LEVEL_LENGTH, nextX - TUNNEL_START_X));
+  const d = (curLevel - 1) * LEVEL_LENGTH + segDistInTunnel;
+  const gap = isOpen ? 400 : Math.max(140, 250 - d / 100);
+  const sh = isOpen ? 20 : Math.min(100, 40 + d / 150);
+  let len = forceLen || Math.max(190, 280 - d / 120);
+  if (!isOpen && nextX + len > TUNNEL_END_X) {
+    len = TUNNEL_END_X - nextX;
+  }
+  let c = isOpen ? H / 2 : (lastC + rnd(-sh, sh));
+  c = Math.max(gap / 2 + 50, Math.min(H - gap / 2 - 50, c));
+  lastC = c;
+  const top = isOpen ? -300 : (c - gap / 2);
+  const bot = isOpen ? (H + 300) : (c + gap / 2);
+  const z = (curLevel - 1) % 3;
+  const { topSpikes, botSpikes } = makeSpikes(len, d, z, top, bot, isOpen);
+  segs.push({ x: nextX, w: len, top, bot, z, topSpikes, botSpikes, isOpen });
+  nextX += len;
+}
+
+function startLevel(lvl) {
+  curLevel = lvl;
+  cam = 0;
+  vy = 0;
+  cy = ROAD_TOP + 8;
+  lastC = H / 2;
+  parts = [];
+  stopping = false;
+  stopTimer = 0;
+  levelCompleteTimer = 0;
+  confettis = [];
+  const z = (curLevel - 1) % 3;
+
+  // 1. Initial open section covering start road platform (-50 to 470) and open gap up to TUNNEL_START_X (650)
+  const initW = TUNNEL_START_X - START_ROAD_START;
+  const { topSpikes, botSpikes } = makeSpikes(initW, (curLevel - 1) * LEVEL_LENGTH, z, -300, H + 300, true);
+  segs = [{ x: START_ROAD_START, w: initW, top: -300, bot: H + 300, z, topSpikes, botSpikes, isOpen: true }];
+  nextX = TUNNEL_START_X;
+
+  // 2. Tunnel segments from TUNNEL_START_X (650) to TUNNEL_END_X (1650)
+  while (nextX < TUNNEL_END_X) {
+    addSeg(false);
+  }
+
+  // 3. Post-tunnel open section covering open gap, finish road platform, and beyond
+  const postW = (FINISH_ROAD_END + 500) - TUNNEL_END_X;
+  const endSpikes = makeSpikes(postW, curLevel * LEVEL_LENGTH, z, -300, H + 300, true);
+  segs.push({ x: TUNNEL_END_X, w: postW, top: -300, bot: H + 300, z, topSpikes: endSpikes.topSpikes, botSpikes: endSpikes.botSpikes, isOpen: true });
+  nextX = TUNNEL_END_X + postW;
+}
+
+function resetGame() {
+  curLevel = 1;
+  cam = 0;
+  startLevel(1);
+}
+
+function initConfetti() {
+  confettis = [];
+  const colors = ['#45d65d', '#ffd84d', '#38bdf8', '#ff4d6d', '#a78bfa', '#ffffff', '#fb923c'];
+  for (let i = 0; i < 75; i++) {
+    confettis.push({
+      x: rnd(10, W - 10),
+      y: rnd(-80, H * 0.45),
+      vx: rnd(-35, 35),
+      vy: rnd(65, 160),
+      size: rnd(4, 7),
+      w: rnd(5, 9),
+      rot: rnd(0, 6.28),
+      vRot: rnd(-4, 4),
+      color: colors[Math.floor(Math.random() * colors.length)]
+    });
+  }
+}
+
+function updateConfetti(dt) {
+  for (const c of confettis) {
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    c.rot += c.vRot * dt;
+    if (c.y > H + 20) {
+      c.y = rnd(-20, -5);
+      c.x = rnd(10, W - 10);
+      c.vy = rnd(65, 160);
+    }
+  }
+  if (st === 'level_complete' && confettis.length < 90 && Math.random() < 0.3) {
+    const colors = ['#45d65d', '#ffd84d', '#38bdf8', '#ff4d6d', '#a78bfa', '#ffffff', '#fb923c'];
+    confettis.push({
+      x: rnd(10, W - 10),
+      y: -10,
+      vx: rnd(-35, 35),
+      vy: rnd(65, 160),
+      size: rnd(4, 7),
+      w: rnd(5, 9),
+      rot: rnd(0, 6.28),
+      vRot: rnd(-4, 4),
+      color: colors[Math.floor(Math.random() * colors.length)]
+    });
+  }
+}
+
+function drawConfetti() {
+  for (const c of confettis) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.rot);
+    ctx.fillStyle = c.color;
+    ctx.fillRect(-c.w / 2, -c.size / 2, c.w * Math.abs(Math.cos(c.rot)), c.size);
+    ctx.restore();
+  }
+}
+
+function die() {
+  st = 'dead';
+  deadAt = performance.now();
+  hold = false;
+  const tunnelDist = Math.max(0, Math.min(LEVEL_LENGTH, (cam + CX) - TUNNEL_START_X));
+  const progress = tunnelDist / LEVEL_LENGTH;
+  const curScore = Math.floor(progress * 100);
+  const currentTotal = 100 * (curLevel - 1) + curScore;
+  if (currentTotal > best) {
+    best = currentTotal;
+    try { localStorage.setItem('skycarBest', best); } catch (e) {}
+  }
+}
+
+// Draw small man in black suit standing near the right end of the platform
+function drawMan(x, feetY) {
+  if (x < -30 || x > W + 30) return;
+  ctx.save();
+  // Shoes
+  ctx.fillStyle = '#0a0a0c';
+  ctx.fillRect(x - 5, feetY - 3, 5, 3);
+  ctx.fillRect(x + 1, feetY - 3, 5, 3);
+
+  // Black Trousers
+  ctx.fillStyle = '#18191c';
+  ctx.fillRect(x - 4.5, feetY - 14, 4, 11);
+  ctx.fillRect(x + 1.5, feetY - 14, 4, 11);
+
+  // Black Suit Jacket / Torso
+  ctx.fillStyle = '#151619';
+  ctx.fillRect(x - 6, feetY - 26, 13, 12);
+
+  // White shirt collar / chest V
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(x - 2, feetY - 26);
+  ctx.lineTo(x + 3, feetY - 26);
+  ctx.lineTo(x + 0.5, feetY - 20);
+  ctx.closePath();
+  ctx.fill();
+
+  // Red Tie
+  ctx.fillStyle = '#c8202a';
+  ctx.beginPath();
+  ctx.moveTo(x, feetY - 25);
+  ctx.lineTo(x + 1, feetY - 25);
+  ctx.lineTo(x + 1.2, feetY - 19);
+  ctx.lineTo(x + 0.5, feetY - 17.5);
+  ctx.lineTo(x - 0.2, feetY - 19);
+  ctx.closePath();
+  ctx.fill();
+
+  // Suit lapels
+  ctx.strokeStyle = '#2d2f35';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 3, feetY - 26);
+  ctx.lineTo(x - 1, feetY - 20);
+  ctx.lineTo(x - 3, feetY - 14);
+  ctx.moveTo(x + 4, feetY - 26);
+  ctx.lineTo(x + 2, feetY - 20);
+  ctx.lineTo(x + 4, feetY - 14);
+  ctx.stroke();
+
+  // Arms
+  ctx.fillStyle = '#18191c';
+  ctx.fillRect(x - 8, feetY - 25, 2.5, 11);
+  ctx.fillRect(x + 6.5, feetY - 25, 2.5, 11);
+  // Hands
+  ctx.fillStyle = '#f5cba7';
+  ctx.fillRect(x - 8, feetY - 14, 2.5, 2.5);
+  ctx.fillRect(x + 6.5, feetY - 14, 2.5, 2.5);
+
+  // Head
+  ctx.fillStyle = '#f5cba7';
+  ctx.beginPath();
+  ctx.arc(x + 0.5, feetY - 29, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Black hair
+  ctx.fillStyle = '#101014';
+  ctx.beginPath();
+  ctx.arc(x + 0.5, feetY - 30.5, 4.2, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(x - 3.7, feetY - 31, 2, 3);
+
+  // Sunglasses
+  ctx.fillStyle = '#050507';
+  ctx.fillRect(x - 2.5, feetY - 30, 6, 2);
+
+  ctx.restore();
+}
+
+// Draw thick 3-layer bridge platform (Asphalt Top, Red Deck Edge, Steel Truss)
+function drawRoadPlatform(startX,endX,roadTop){
+  const w=endX-startX;
+  if(w<=0)return;
+  const x=startX-cam;
+  if(x+w<-60||x>W+60)return;
+
+  const roadBottom=roadTop+57; // total ~57 px tall (28 + 7 + 22)
+
+  ctx.save();
+  // Cut right end at a 12 px slant like a bridge end
+  ctx.beginPath();
+  ctx.moveTo(x-20,roadTop-2);
+  ctx.lineTo(x+w,roadTop-2);
+  ctx.lineTo(x+w-12,roadBottom+2);
+  ctx.lineTo(x-20,roadBottom+2);
+  ctx.closePath();
+  ctx.clip();
+
+  // 1. ASPHALT TOP (28 px tall): dark charcoal (#26282c)
+  ctx.fillStyle='#26282c';
+  ctx.fillRect(x,roadTop,w,28);
+
+  // Thin red line (2 px, #c8202a) along its very top back edge
+  ctx.fillStyle='#c8202a';
+  ctx.fillRect(x,roadTop,w,2);
+
+  // 2. White dashed lane marking (#e9e9e9) at roadTop + 14:
+  // each dash 22 px long and 4 px tall, 26 px gap (period 48 px), scrolling with the world
+  ctx.fillStyle='#e9e9e9';
+  const startDash=Math.floor(startX/48)*48;
+  for(let wx=startDash;wx<endX+48;wx+=48){
+    const dx=wx-cam;
+    ctx.fillRect(dx,roadTop+14,22,4);
+  }
+
+  // 3. RED DECK EDGE (7 px tall): glossy bright red (#e0262f) bar directly under asphalt
+  ctx.fillStyle='#e0262f';
+  ctx.fillRect(x,roadTop+28,w,7);
+
+  // 1 px lighter highlight line on top (#ff6b6b)
+  ctx.fillStyle='#ff6b6b';
+  ctx.fillRect(x,roadTop+28,w,1);
+
+  // 1 px darker line at the bottom
+  ctx.fillStyle='#8f1218';
+  ctx.fillRect(x,roadTop+34,w,1);
+
+  // 4. STEEL TRUSS (22 px tall): very dark background (#1d1f23) directly under red deck edge
+  ctx.fillStyle='#1d1f23';
+  ctx.fillRect(x,roadTop+35,w,22);
+
+  // Thin red rails (2 px, #c8202a) along its top and bottom edges
+  ctx.fillStyle='#c8202a';
+  ctx.fillRect(x,roadTop+35,w,2);
+  ctx.fillRect(x,roadTop+55,w,2);
+
+  // Diagonal braces (2 px, #4a4e55) alternating direction (X lattice look)
+  ctx.strokeStyle='#4a4e55';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  const startTruss=Math.floor(startX/40)*40;
+  for(let wx=startTruss;wx<endX+40;wx+=40){
+    const p1=wx-cam,p2=wx+40-cam;
+    ctx.moveTo(p1,roadTop+37);ctx.lineTo(p2,roadTop+55);
+    ctx.moveTo(p2,roadTop+37);ctx.lineTo(p1,roadTop+55);
+  }
+  ctx.stroke();
+
+  // Vertical posts every 40 px (6 px wide, #3a3d43, with small lighter joint caps)
+  for(let wx=startTruss;wx<=endX+40;wx+=40){
+    const px=wx-cam;
+    ctx.fillStyle='#3a3d43';
+    ctx.fillRect(px-3,roadTop+35,6,22);
+    // Lighter joint caps
+    ctx.fillStyle='#656b76';
+    ctx.fillRect(px-3,roadTop+35,6,2.5);
+    ctx.fillRect(px-3,roadTop+54.5,6,2.5);
+  }
+
+  ctx.restore();
+
+  // Slanted right end outline border
+  ctx.save();
+  ctx.strokeStyle='#3a3d43';
+  ctx.lineWidth=2.5;
+  ctx.beginPath();
+  ctx.moveTo(x+w,roadTop);
+  ctx.lineTo(x+w-12,roadBottom);
+  ctx.stroke();
+
+  // Slanted cap accents
+  ctx.fillStyle='#c8202a';
+  ctx.fillRect(x+w-2,roadTop,2,2);
+  ctx.fillStyle='#e0262f';
+  ctx.fillRect(x+w-6,roadTop+28,3,7);
+  ctx.fillStyle='#c8202a';
+  ctx.fillRect(x+w-13,roadTop+55,3,2);
+  ctx.restore();
+}
+
+function step(dt){
+  const sp=speed();
+
+  // Background atmospheric drifting mist
+  const z=(curLevel-1)%3;
+  for(const ap of atmoParts){
+    ap.phase+=dt*2;
+    if(z===0){
+      ap.x+=ap.vx*dt*2-sp*0.3*dt;
+      ap.y+=Math.sin(ap.phase)*12*dt;
+    }else if(z===1){
+      ap.x+=Math.cos(ap.phase)*14*dt-sp*0.25*dt;
+      ap.y+=Math.sin(ap.phase)*10*dt;
+    }else{
+      ap.x+=ap.vx*dt*1.5-sp*0.35*dt;
+      ap.y-=rnd(20,45)*dt;
+    }
+    if(ap.x<0)ap.x+=W;
+    if(ap.x>W)ap.x-=W;
+    if(ap.y<0)ap.y+=H;
+    if(ap.y>H)ap.y-=H;
+  }
+
+  if(st==='ready'){
+    // Car sitting ready on the starting road platform
+    cy=ROAD_TOP+8;
+    vy=0;
+    cam=0;
+  } else if(st==='play'){
+    const wx=cam+CX;
+
+    // Check finish ease-down: when car is above finish platform, scroll speed eases down to 0 over 1.5s
+    if(wx>=FINISH_ROAD_X+40 && !stopping){
+      stopping=true;
+      stopTimer=0;
+    }
+
+    let ease=1;
+    if(stopping){
+      stopTimer+=dt;
+      ease=Math.max(0,1-stopTimer/1.5);
+      if(stopTimer>=1.5){
+        st='level_complete';
+        stopping=false;
+        hold=false;
+        vy=0;
+        cy=ROAD_TOP+8;
+        levelCompleteTimer=0;
+        initConfetti();
+      }
+    }
+
+    const effectiveSp=sp*ease;
+    cam+=effectiveSp*dt;
+
+    // Flight physics with thrusters and gravity (player keeps control even after spikes!)
+    if(hold)vy-=THRUST*dt;else vy+=GRAVITY*dt;
+    vy=Math.max(-MAX_V,Math.min(MAX_V,vy));
+    cy+=vy*dt;
+
+    // Road platform floor physics for both start and finish platforms:
+    // While the car is above either platform and button is NOT held, road works as a floor at ROAD_TOP + 8
+    const onStartPlatform=(wx>=START_ROAD_START && wx<=START_ROAD_END);
+    const onFinishPlatform=(wx>=FINISH_ROAD_X && wx<=FINISH_ROAD_END);
+    const onRoadPlatform=onStartPlatform||onFinishPlatform;
+
+    if(onRoadPlatform){
+      if(!hold && cy>=ROAD_TOP+8){
+        cy=ROAD_TOP+8;
+        vy=0;
+      } else if(cy>ROAD_TOP+8){
+        cy=ROAD_TOP+8;
+        if(vy>0)vy=0;
+      }
+    }
+
+    if(cy<12){cy=12;vy=0}
+    if(cy>H-12){cy=H-12;vy=0}
+
+    // Wheel rotation: while on the road wheels visibly spin
+    if(onRoadPlatform && cy>=ROAD_TOP+7.5 && effectiveSp>0){
+      wheelRot+=effectiveSp*dt*0.16;
+      if(Math.random()<0.35){
+        parts.push({
+          x:CX-22,
+          y:cy+15,
+          vx:rnd(-50,-20),
+          vy:rnd(-8,-2),
+          l:0,
+          m:rnd(0.2,0.35),
+          isSmoke:true
+        });
+      }
+    } else if(effectiveSp>0){
+      wheelRot+=effectiveSp*dt*0.1;
+    }
+
+    // Two vertical streams of white thruster smoke shooting straight down from beneath wheels!
+    if(hold && st==='play'){
+      for(const ox of[-20,21]){
+        parts.push({
+          x:CX+ox,
+          y:cy+14,
+          vx:rnd(-3,3)-effectiveSp*0.15,
+          vy:rnd(140,230),
+          l:0,
+          m:rnd(0.32,0.52),
+          size:rnd(3.5,6.5),
+          isSmoke:true
+        });
+      }
+    }
+
+    if(nextX<cam+W+400)addSeg(true,400);
+    while(segs.length&&segs[0].x+segs[0].w<cam-100)segs.shift();
+
+    // Collision check against spikes and tunnel walls (safe on open road)
+    for(const s of segs){
+      if(wx+26>s.x&&wx-26<s.x+s.w&&!s.isOpen){
+        if(cy-9<s.top-18||cy+11>s.bot+18){die();break}
+        let hit=false;
+        const count=s.topSpikes.length;
+        for(let i=0;i<count;i++){
+          const spX=s.x+i*12;
+          if(wx+26>spX&&wx-26<spX+12){
+            const topTip=(s.top-18)+s.topSpikes[i].h;
+            const botTip=(s.bot+18)-s.botSpikes[i].h;
+            if((cy-9)<topTip-6||(cy+11)>botTip+6){
+              hit=true;break;
+            }
+          }
+        }
+        if(hit){die();break}
+      }
+    }
+  } else if(st==='level_complete'){
+    levelCompleteTimer+=dt;
+    cy=ROAD_TOP+8;
+    vy=0;
+    updateConfetti(dt);
+  }
+
+  // Update particles
+  for(const p of parts){p.l+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt}
+  parts=parts.filter(p=>p.l<p.m);
+}
+
+// 1993 McLaren F1 supercar
+function car(drawX=CX){
+  ctx.save();
+  ctx.translate(drawX,cy);
+  ctx.rotate(Math.max(-.14,Math.min(.14,vy/600)));
+
+  // Carbon fiber lower splitter, side-skirts and rear diffuser
+  ctx.fillStyle='#141518';
+  ctx.fillRect(-33,6,68,4);
+  ctx.fillRect(32,6,6,3); // front splitter
+  ctx.fillRect(-35,6,5,4); // rear diffuser
+
+  // Iconic McLaren Papaya Orange aerodynamic body
+  const bodyGrad=ctx.createLinearGradient(0,-12,0,8);
+  bodyGrad.addColorStop(0,'#ff8d24');
+  bodyGrad.addColorStop(0.5,'#f37021');
+  bodyGrad.addColorStop(1,'#c85008');
+  ctx.fillStyle=bodyGrad;
+
+  ctx.beginPath();
+  ctx.moveTo(37,7);
+  ctx.lineTo(35,2);
+  ctx.lineTo(26,-2);
+  ctx.lineTo(12,-6);
+  ctx.lineTo(-2,-10.5);
+  ctx.lineTo(-14,-10.5);
+  ctx.lineTo(-24,-6.5);
+  ctx.lineTo(-33,-3);
+  ctx.lineTo(-34,7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Signature McLaren F1 Roof Air Intake Scoop
+  ctx.fillStyle='#16181c';
+  ctx.beginPath();
+  ctx.moveTo(-4,-10.5);
+  ctx.lineTo(-2,-13.5);
+  ctx.lineTo(-13,-13.5);
+  ctx.lineTo(-15,-10.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle='#ff7700';
+  ctx.fillRect(-3,-13,2,2);
+
+  // Cockpit canopy and side windows (tinted central driver canopy)
+  ctx.fillStyle='#111317';
+  ctx.beginPath();
+  ctx.moveTo(-1,-9.5);
+  ctx.lineTo(10,-5.5);
+  ctx.lineTo(12,-2.5);
+  ctx.lineTo(-12,-2.5);
+  ctx.lineTo(-18,-6);
+  ctx.closePath();
+  ctx.fill();
+  // Glass highlight
+  ctx.strokeStyle='rgba(255,255,255,0.45)';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(8,-5);
+  ctx.lineTo(-1,-8.5);
+  ctx.lineTo(-14,-6);
+  ctx.stroke();
+
+  // Signature Dihedral Door Scalloped Side Intake
+  ctx.fillStyle='#9e3c06';
+  ctx.beginPath();
+  ctx.moveTo(-7,2);
+  ctx.lineTo(12,2);
+  ctx.lineTo(4,5);
+  ctx.lineTo(-10,5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Distinctive curved McLaren glass headlights
+  ctx.fillStyle='#ffeaa7';
+  ctx.beginPath();
+  ctx.moveTo(27,-1);
+  ctx.lineTo(33,2);
+  ctx.lineTo(28,2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tail lights and chrome exhaust
+  ctx.fillStyle='#ff2424';
+  ctx.fillRect(-34,0,2,3);
+  ctx.fillRect(-34,4,2,2);
+  ctx.fillStyle='#c5c9d0';
+  ctx.fillRect(-36,5,2,2.5);
+
+  // Carbon rear wing
+  ctx.fillStyle='#16181c';
+  ctx.fillRect(-31,-8,2,6);
+  ctx.fillRect(-34,-9,8,2.5);
+
+  // 5-Spoke OZ Racing Magnesium Wheels with rotation
+  for(const wx of[-20,21]){
+    ctx.save();
+    ctx.translate(wx,8);
+    ctx.rotate(wheelRot);
+
+    // Dark performance tire
+    ctx.fillStyle='#121316';
+    ctx.beginPath();ctx.arc(0,0,7.5,0,6.28);ctx.fill();
+
+    // Magnesium alloy rim
+    ctx.fillStyle='#6c727f';
+    ctx.beginPath();ctx.arc(0,0,5,0,6.28);ctx.fill();
+
+    // 5-Spoke Star
+    ctx.strokeStyle='#f0f2f5';
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(let a=0;a<5;a++){
+      const ang=(a*Math.PI*2)/5;
+      ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(ang)*4.5,Math.sin(ang)*4.5);
+    }
+    ctx.stroke();
+
+    // Center hub
+    ctx.fillStyle='#121316';
+    ctx.beginPath();ctx.arc(0,0,1.8,0,6.28);ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function tx(s,x,y,size,align,col){
+  ctx.font='700 '+size+'px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  ctx.textAlign=align;ctx.fillStyle=col||'#fff';ctx.fillText(s,x,y);
+}
+
+function drawBackground(z){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  if(z===0){
+    g.addColorStop(0,'#11161d');g.addColorStop(0.5,'#1c2533');g.addColorStop(1,'#0c0f14');
+  }else if(z===1){
+    g.addColorStop(0,'#09170e');g.addColorStop(0.5,'#122818');g.addColorStop(1,'#060e08');
+  }else{
+    g.addColorStop(0,'#200908');g.addColorStop(0.5,'#341212');g.addColorStop(1,'#0f0404');
+  }
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+  const zt=THEMES[z].t;
+  for(let i=0;i<3;i++)tint[i]+=(zt[i]-tint[i])*.03;
+  ctx.globalAlpha=.24;ctx.fillStyle='rgb('+tint.map(Math.round)+')';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+
+  // Parallax Layer 1 (smoky clouds & distant skyline)
+  const p1=(cam*0.12)%400;
+  ctx.save();
+  if(z===0){
+    ctx.fillStyle='rgba(18,24,32,0.65)';
+    for(let bx=-p1-40;bx<W+40;bx+=80){
+      ctx.fillRect(bx,H*0.48,32,H*0.52);
+      ctx.fillRect(bx+8,H*0.38,12,H*0.62);
+      ctx.beginPath();ctx.moveTo(bx+35,H*0.52);ctx.lineTo(bx+55,H*0.44);ctx.lineTo(bx+75,H*0.52);ctx.fill();
+    }
+  }else if(z===1){
+    ctx.fillStyle='rgba(12,28,18,0.65)';
+    for(let bx=-p1-60;bx<W+60;bx+=100){
+      ctx.beginPath();ctx.arc(bx+50,H*0.58,65,Math.PI,0);ctx.fill();
+      ctx.fillRect(bx+42,H*0.58,16,H*0.42);
+    }
+  }else{
+    ctx.fillStyle='rgba(38,12,12,0.68)';
+    ctx.beginPath();ctx.moveTo(-40,H);
+    for(let bx=-p1-60;bx<W+80;bx+=70){
+      ctx.lineTo(bx,H*0.54);ctx.lineTo(bx+35,H*0.42);ctx.lineTo(bx+70,H*0.55);
+    }
+    ctx.lineTo(W+40,H);ctx.closePath();ctx.fill();
+    const caldera=ctx.createLinearGradient(0,H*0.4,0,H*0.75);
+    caldera.addColorStop(0,'rgba(255,80,40,0)');caldera.addColorStop(1,'rgba(255,60,20,0.18)');
+    ctx.fillStyle=caldera;ctx.fillRect(0,H*0.4,W,H*0.35);
+  }
+  ctx.restore();
+
+  // Parallax Layer 2
+  const p2=(cam*0.28)%320;
+  ctx.save();
+  if(z===0){
+    ctx.strokeStyle='rgba(42,52,66,0.6)';ctx.lineWidth=7;ctx.beginPath();
+    for(let bx=-p2-40;bx<W+40;bx+=110){
+      ctx.moveTo(bx,H*0.32);ctx.lineTo(bx+65,H*0.32);ctx.lineTo(bx+65,H*0.68);ctx.lineTo(bx+110,H*0.68);
+      ctx.stroke();
+    }
+  }else if(z===1){
+    ctx.strokeStyle='rgba(26,58,34,0.65)';ctx.lineWidth=4;ctx.beginPath();
+    for(let bx=-p2-40;bx<W+40;bx+=90){
+      ctx.moveTo(bx,H*0.25);ctx.quadraticCurveTo(bx+30,H*0.65,bx+60,H*0.3);ctx.stroke();
+    }
+  }else{
+    ctx.fillStyle='rgba(28,10,10,0.7)';
+    for(let bx=-p2-30;bx<W+30;bx+=95){
+      ctx.fillRect(bx,H*0.28,24,H*0.44);
+      ctx.strokeStyle='rgba(255,80,40,0.45)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(bx+8,H*0.32);ctx.lineTo(bx+14,H*0.45);ctx.lineTo(bx+10,H*0.6);ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // Atmospheric floating particles
+  ctx.save();
+  for(const ap of atmoParts){
+    if(z===0){
+      ctx.fillStyle='rgba(255,200,90,0.75)';
+      ctx.beginPath();ctx.arc(ap.x,ap.y,ap.size*0.7,0,6.28);ctx.fill();
+    }else if(z===1){
+      ctx.fillStyle='rgba(110,255,160,0.6)';
+      ctx.beginPath();ctx.arc(ap.x,ap.y,ap.size*0.9,0,6.28);ctx.fill();
+    }else{
+      ctx.fillStyle='rgba(255,90,50,0.78)';
+      ctx.beginPath();ctx.arc(ap.x,ap.y,ap.size*0.8,0,6.28);ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawWall(s,x,z){
+  const topY=Math.max(0,s.top-18);
+  const botY=s.bot+18;
+  const w=s.w+1;
+
+  if(z===0){
+    ctx.fillStyle='#23272e';
+    ctx.fillRect(x,0,w,topY);
+    ctx.fillRect(x,botY,w,H-botY);
+    ctx.strokeStyle='#171a1f';ctx.lineWidth=1.5;
+    for(let px=0;px<s.w;px+=48){
+      ctx.beginPath();ctx.moveTo(x+px,0);ctx.lineTo(x+px,topY);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x+px,botY);ctx.lineTo(x+px,H);ctx.stroke();
+      ctx.fillStyle='#3a3f47';
+      ctx.fillRect(x+px-2,topY-10,4,4);
+      ctx.fillRect(x+px-2,botY+6,4,4);
+    }
+    ctx.fillStyle='#404650';
+    ctx.fillRect(x,s.top-22,w,4);
+    ctx.fillRect(x,botY,w,4);
+    const blink=((performance.now()*0.004)%2)>1;
+    ctx.fillStyle=blink?'#68d8d6':'#1d6060';
+    for(let lx=16;lx<s.w;lx+=64){
+      ctx.fillRect(x+lx,s.top-21,3,2);
+      ctx.fillRect(x+lx,botY+1,3,2);
+    }
+  }else if(z===1){
+    ctx.fillStyle='#131b15';
+    ctx.fillRect(x,0,w,topY);
+    ctx.fillRect(x,botY,w,H-botY);
+    ctx.fillStyle='#25422a';
+    ctx.fillRect(x,s.top-22,w,4);
+    ctx.fillRect(x,botY,w,4);
+    ctx.strokeStyle='#355a3c';ctx.lineWidth=2;
+    ctx.beginPath();
+    for(let rx=12;rx<s.w;rx+=36){
+      ctx.moveTo(x+rx,s.top-22);ctx.lineTo(x+rx+6,s.top-12);
+      ctx.moveTo(x+rx+10,botY+4);ctx.lineTo(x+rx+16,botY+14);
+    }
+    ctx.stroke();
+  }else{
+    ctx.fillStyle='#180f10';
+    ctx.fillRect(x,0,w,topY);
+    ctx.fillRect(x,botY,w,H-botY);
+    ctx.fillStyle='#6b1d1a';
+    ctx.fillRect(x,s.top-22,w,4);
+    ctx.fillRect(x,botY,w,4);
+    ctx.strokeStyle='rgba(255,90,40,0.7)';ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(let cx=18;cx<s.w;cx+=44){
+      ctx.moveTo(x+cx,topY-2);ctx.lineTo(x+cx+8,topY-12);ctx.lineTo(x+cx+16,topY-8);
+      ctx.moveTo(x+cx+12,botY+2);ctx.lineTo(x+cx+18,botY+12);ctx.lineTo(x+cx+24,botY+6);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawSpike(x,baseY,isTop,sp,z){
+  const h=sp.h;
+  if(h<=0)return;
+  const tipY=isTop?baseY+h:baseY-h;
+  const col=SPIKE_COLORS[z][sp.size];
+  const type=sp.type||'cone';
+  const glow=THEMES[z].glow;
+
+  ctx.save();
+  ctx.fillStyle=col;
+
+  if(type==='cone'){
+    ctx.beginPath();ctx.moveTo(x,baseY);ctx.lineTo(x+12,baseY);ctx.lineTo(x+6,tipY);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=sp.size==='big'?'#ffffff':'rgba(255,255,255,0.45)';
+    ctx.lineWidth=sp.size==='big'?1.2:0.8;
+    ctx.beginPath();ctx.moveTo(x+6,baseY+(isTop?3:-3));ctx.lineTo(x+6,tipY);ctx.stroke();
+  }else if(type==='thorn'||type==='claw'){
+    const bend=isTop?2:10;
+    ctx.beginPath();ctx.moveTo(x,baseY);ctx.lineTo(x+12,baseY);
+    ctx.quadraticCurveTo(x+bend,baseY+(tipY-baseY)*0.45,x+6,tipY);
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle=sp.size==='big'?'#ffffff':'rgba(255,255,255,0.45)';
+    ctx.lineWidth=0.9;
+    ctx.beginPath();ctx.moveTo(x+6,baseY);
+    ctx.quadraticCurveTo(x+bend+1,baseY+(tipY-baseY)*0.45,x+6,tipY);ctx.stroke();
+  }else if(type==='fork'){
+    const dip=baseY+(tipY-baseY)*0.48;
+    ctx.beginPath();ctx.moveTo(x,baseY);ctx.lineTo(x+3,tipY);ctx.lineTo(x+6,dip);ctx.lineTo(x+9,tipY);ctx.lineTo(x+12,baseY);
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle=sp.size==='big'?'#ffffff':'rgba(255,255,255,0.5)';
+    ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.moveTo(x+3,dip);ctx.lineTo(x+3,tipY);ctx.moveTo(x+9,dip);ctx.lineTo(x+9,tipY);ctx.stroke();
+  }else if(type==='crystal'||type==='jagged'){
+    const c1=baseY+(tipY-baseY)*0.65;
+    ctx.beginPath();ctx.moveTo(x,baseY);ctx.lineTo(x+2,c1);ctx.lineTo(x+6,tipY);ctx.lineTo(x+10,c1);ctx.lineTo(x+12,baseY);
+    ctx.closePath();ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.3)';
+    ctx.beginPath();ctx.moveTo(x+6,tipY);ctx.lineTo(x+2,c1);ctx.lineTo(x+6,baseY);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#ffffff';ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.moveTo(x+6,baseY);ctx.lineTo(x+6,tipY);ctx.stroke();
+  }else if(type==='saw'){
+    const rot=(performance.now()*0.0035)%(Math.PI*2);
+    ctx.beginPath();ctx.arc(x+6,baseY,h,isTop?0:Math.PI,isTop?Math.PI:0,false);ctx.fill();
+    ctx.strokeStyle='#ffffff';ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let a=0;a<Math.PI;a+=0.6){
+      const ang=(isTop?a:a+Math.PI)+rot;
+      const tx=x+6+Math.cos(ang)*h;
+      const ty=baseY+Math.sin(ang)*h;
+      ctx.moveTo(x+6,baseY);ctx.lineTo(tx,ty);
+    }
+    ctx.stroke();
+  }
+
+  // Tip glow
+  ctx.fillStyle=glow;
+  ctx.beginPath();ctx.arc(x+6,tipY,sp.size==='big'?3.5:2,0,6.28);ctx.fill();
+  if(sp.size==='big'){
+    ctx.fillStyle='#ffffff';
+    ctx.beginPath();ctx.arc(x+6,tipY,1.5,0,6.28);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function draw(){
+  const z=(curLevel-1)%3;
+  drawBackground(z);
+
+  // 1. Draw Starting Road Platform (covers world x from -50 to 470)
+  drawRoadPlatform(START_ROAD_START,START_ROAD_END,ROAD_TOP);
+
+  // 2. Draw Finish Road Platform (covers world x from 1950 to 2470)
+  drawRoadPlatform(FINISH_ROAD_X,FINISH_ROAD_END,ROAD_TOP);
+
+  // 3. Draw small man in black suit standing near the right end of the finish platform
+  drawMan(FINISH_ROAD_X+430-cam,ROAD_TOP+24);
+
+  // 4. Draw Tunnel walls & spikes (they only exist in the tunnel!)
+  for(const s of segs){
+    const x=s.x-cam;
+    if(!s.isOpen)drawWall(s,x,s.z);
+
+    const count=s.topSpikes.length;
+    for(let i=0;i<count;i++){
+      drawSpike(x+i*12,s.top-18,true,s.topSpikes[i],s.z);
+    }
+    for(let i=0;i<count;i++){
+      drawSpike(x+i*12,s.bot+18,false,s.botSpikes[i],s.z);
+    }
+  }
+
+  // 5. Sky Car (sleek McLaren F1 supercar) drawn on top of the road
+  car(CX);
+
+  // 6. Vertical wheel thruster smoke and road dust particles (drawn on top of the car)
+  for(const p of parts){
+    const k=1-p.l/p.m;
+    ctx.globalAlpha=0.75*k;
+    ctx.fillStyle='#f0f2f5';
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,(p.size||4)*(1+0.4*(1-k)),0,6.28);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // 7. Festive Confetti falling during Level Complete
+  drawConfetti();
+
+  // HUD and UI Screens
+  const tunnelDist=Math.max(0,Math.min(LEVEL_LENGTH,(cam+CX)-TUNNEL_START_X));
+  const progress=tunnelDist/LEVEL_LENGTH;
+  const curScore=Math.floor(progress*100);
+  const currentTotal=100*(curLevel-1)+curScore;
+  if(currentTotal>best){best=currentTotal;try{localStorage.setItem('skycarBest',best)}catch(e){}}
+
+  if(st==='play'){
+    // Top Progress Bar
+    const bx=16,by=24,bw=W-32,bh=8;
+
+    // Level & Theme Name
+    tx('Level '+curLevel+': '+THEMES[z].name,W/2,18,12,'center','#f0f2f5');
+
+    // Bar background track
+    ctx.fillStyle='rgba(15,16,18,0.65)';
+    roundRect(ctx,bx,by,bw,bh,4);
+    ctx.fill();
+
+    // Bar progress fill (fills 0 to 1 over the tunnel part of the level)
+    const fillW=Math.max(0,bw*progress);
+    if(fillW>0){
+      ctx.fillStyle=THEMES[z].s;
+      roundRect(ctx,bx,by,fillW,bh,4);
+      ctx.fill();
+    }
+
+    // Score display: current level score and cumulative total
+    tx(curScore+' / 100',16,66,24,'left');
+    tx('Score '+currentTotal+'  |  Best '+best,W-16,64,13,'right','#e6e6e6');
+
+  } else if(st==='level_complete'){
+    // Dark overlay behind dialog
+    ctx.fillStyle='rgba(8,10,14,0.45)';
+    ctx.fillRect(0,0,W,H);
+
+    // Bold green glowing banner "Level N Complete!"
+    const bannerY=150;
+    ctx.save();
+    ctx.shadowColor='#45d65d';
+    ctx.shadowBlur=18;
+    ctx.fillStyle='rgba(12,22,16,0.94)';
+    roundRect(ctx,W/2-140,bannerY,280,84,16);
+    ctx.fill();
+    ctx.strokeStyle='#45d65d';
+    ctx.lineWidth=2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    tx('Level '+curLevel+' Complete!',W/2,bannerY+36,23,'center','#45d65d');
+    tx('Score: '+(100*curLevel),W/2,bannerY+65,17,'center','#ffffff');
+
+    // Pulsing button "Tap for Level N+1" (active after 0.8s)
+    const btnActive=levelCompleteTimer>=0.8;
+    const pulse=btnActive?(1+0.04*Math.sin((levelCompleteTimer-0.8)*8)):1;
+    const btnW=240*pulse;
+    const btnH=54*pulse;
+    const btnX=W/2-btnW/2;
+    const btnY=380-(btnH-54)/2;
+
+    ctx.save();
+    if(btnActive){
+      ctx.shadowColor='#45d65d';
+      ctx.shadowBlur=14;
+      ctx.fillStyle='rgba(69,214,93,0.22)';
+      ctx.strokeStyle='#45d65d';
+    } else {
+      ctx.fillStyle='rgba(255,255,255,0.08)';
+      ctx.strokeStyle='rgba(255,255,255,0.25)';
+    }
+    roundRect(ctx,btnX,btnY,btnW,btnH,27*pulse);
+    ctx.fill();
+    ctx.lineWidth=2;
+    ctx.stroke();
+    ctx.restore();
+
+    const nextLvl=curLevel+1;
+    if(btnActive){
+      tx('Tap for Level '+nextLvl,W/2,btnY+btnH/2+6,19*pulse,'center','#45d65d');
+    } else {
+      tx('Level '+nextLvl+' Ready...',W/2,btnY+btnH/2+5,16,'center','#8e96a4');
+    }
+
+  } else if(st==='ready'){
+    ctx.fillStyle='rgba(10,10,12,0.6)';
+    ctx.fillRect(0,0,W,H);
+
+    tx('Sky Car',W/2,170,48,'center');
+    tx('LEVEL '+curLevel+': '+THEMES[z].name.toUpperCase(),W/2,220,16,'center',THEMES[z].glow);
+    tx('Drive on road, then launch into spikes!',W/2,250,14,'center','#ddd');
+
+    // Launch Button
+    ctx.fillStyle='rgba(255,216,77,0.15)';
+    roundRect(ctx,W/2-115,440,230,52,26);
+    ctx.fill();
+    ctx.strokeStyle='#ffd84d';ctx.lineWidth=2;ctx.stroke();
+    tx('TAP TO START',W/2,472,18,'center','#ffd84d');
+
+  } else if(st==='dead'){
+    ctx.fillStyle='rgba(10,10,12,0.85)';
+    ctx.fillRect(0,0,W,H);
+
+    tx('Crashed',W/2,210,44,'center','#ff5544');
+    tx('Level '+curLevel+': '+curScore+' / 100',W/2,265,22,'center','#ffffff');
+    tx('Total Score: '+currentTotal,W/2,298,16,'center','#ddd');
+    tx('Best Score: '+best,W/2,324,16,'center','#ffd84d');
+
+    ctx.fillStyle='rgba(255,216,77,0.15)';
+    roundRect(ctx,W/2-110,390,220,50,25);
+    ctx.fill();
+    ctx.strokeStyle='#ffd84d';ctx.lineWidth=2;ctx.stroke();
+    tx('RETRY LEVEL '+curLevel,W/2,422,18,'center','#ffd84d');
+  }
+}
+
+function loop(t){
+  const dt=Math.min(.033,(t-last)/1000||0);last=t;
+  step(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function press(){
+  if(st==='ready'){
+    st='play';
+    hold=true;
+  } else if(st==='level_complete'){
+    if(levelCompleteTimer>=0.8){
+      startLevel(curLevel+1);
+      st='play';
+      hold=false;
+    }
+  } else if(st==='dead'){
+    if(performance.now()-deadAt<400)return;
+    startLevel(curLevel);
+    st='ready';
+    hold=false;
+  } else if(st==='play'){
+    hold=true;
+  }
+}
+
+const rel=()=>{hold=false};
+addEventListener('pointerdown',e=>{e.preventDefault();press()});
+addEventListener('pointerup',rel);
+addEventListener('pointercancel',rel);
+addEventListener('blur',rel);
+document.addEventListener('visibilitychange',rel);
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();if(!e.repeat)press()}});
+addEventListener('keyup',e=>{if(e.code==='Space')rel()});
+addEventListener('contextmenu',e=>e.preventDefault());
+
+resetGame();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
