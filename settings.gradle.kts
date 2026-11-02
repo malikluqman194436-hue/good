@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Sky Car"
+rootProject.name = "Thorn Rush"
 
 include(":app")

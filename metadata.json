@@ -1,5 +1,5 @@
 {
-  "name": "Sky Car",
+  "name": "Thorn Rush",
   "description": "An arcade flying vehicle obstacle avoider game: tap to thrust, release to sink, and navigate through the hazards.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
