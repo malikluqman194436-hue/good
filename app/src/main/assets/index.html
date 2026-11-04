@@ -66,7 +66,7 @@ const STAGES = [
     particleType: 'dust',
     spikeStyle: 'steel cone studs',
     railColor: '#5a4a3a',
-    backgroundPicture: ''
+    backgroundPicture: 'image_e46b893e.png'
   },
   {
     name: 'Neon City',
@@ -189,18 +189,24 @@ const SPEED_FAST = 1.7;
 const SPEED_TURBO = 2.3;
 const WIND_VOLUME = 0.12;
 
-// Collectible Coins (5 Rs, 10 Rs, 50 Rs)
-const BRONZE_VALUE = 5;
-const SILVER_VALUE = 10;
-const GOLD_VALUE = 10;
-const GEM_VALUE = 50;
-const COIN_VALUE = 5;
+// Collectible Coins (10, 50, 100)
+const COIN_10_VALUE = 10;
+const COIN_50_VALUE = 50;
+const COIN_100_VALUE = 100;
+const BRONZE_VALUE = 10;
+const SILVER_VALUE = 50;
+const GOLD_VALUE = 50;
+const GEM_VALUE = 100;
+const COIN_VALUE = 10;
 
-const BRONZE_RADIUS = Math.max(21.5, 0.44 * 48); // ~21.5 px (wide and clear for "5 Rs")
-const SILVER_RADIUS = Math.max(22, 0.45 * 48);   // 22 px ("10 Rs")
-const GOLD_RADIUS = Math.max(22.5, 0.46 * 48);   // 22.5 px ("10 Rs")
-const GEM_RADIUS = Math.max(22.5, 0.46 * 48);     // 22.5 px ("50 Rs")
-const COIN_RADIUS = BRONZE_RADIUS;
+const COIN_10_RADIUS = Math.max(22, 0.45 * 48);   // ~22 px (10 Coin)
+const COIN_50_RADIUS = Math.max(23, 0.47 * 48);   // ~23 px (50 Coin)
+const COIN_100_RADIUS = Math.max(24, 0.49 * 48);  // ~24 px (100 Laurel Coin)
+const BRONZE_RADIUS = COIN_10_RADIUS;
+const SILVER_RADIUS = COIN_50_RADIUS;
+const GOLD_RADIUS = COIN_50_RADIUS;
+const GEM_RADIUS = COIN_100_RADIUS;
+const COIN_RADIUS = COIN_10_RADIUS;
 const PICKUP_RADIUS = 0.95 * 48;                // 45.6 px (generous from car center)
 const COINS_PER_LEVEL = 90;
 let bronzeCoinsPicked = 0;
@@ -353,13 +359,26 @@ const TUNNEL_CENTER_MIN = 0.36;
 const TUNNEL_CENTER_MAX = 0.60;
 const TUNNEL_START_CENTER = 0.50;
 
-// Wheel configuration constants (fractions of trimmed car image)
-const WHEEL_REAR_X = 0.18;
-const WHEEL_FRONT_X = 0.817;
-const WHEEL_Y = 0.71;            // from the top of the image
-const WHEEL_RADIUS = 0.091;      // of the image width
-const WHEEL_SPIN_RADIUS = 0.70 * WHEEL_RADIUS; // Perfectly fills the rim opening inside tire
-const SHOW_WHEEL_DEBUG = false;  // When true, draw thin green circles at wheel positions
+// ==========================================
+// TUNING CONSTANTS (Finish Run & Wheel Tuning)
+// ==========================================
+const FINISH_RUN_SPEED = 1.2 * W;     // scroll speed during finish run (px/s)
+const ROAD_END_STOP_X = 0.96 * W;     // screen X where road safety rail stops
+const FINISH_LINE_X = 0.70 * W;       // screen X where finish line is positioned when scroll stops
+const CAR_STOP_FRONT_X = 0.82 * W;    // screen X where front of car stops
+const CHARACTER_X = 0.89 * W;         // screen X where cheering character stands
+
+// Wheel numbers (fractions of trimmed picture: x from left, y from top, radius as fraction of width)
+const WHEEL_REAR_X = 0.215;
+const WHEEL_FRONT_X = 0.776;
+const WHEEL_Y = 0.775;
+const WHEEL_RADIUS = 0.07;
+const WHEEL_SPIN_RADIUS = 0.80 * WHEEL_RADIUS;
+const SHOW_WHEEL_DEBUG = false;       // When true, draw thin green circles at wheel positions
+
+// Car visibility & glow constants
+const CAR_GLOW_COLOR = 'rgba(120, 230, 255, 0.55)';
+const CAR_GLOW_BLUR = 8;
 
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -379,19 +398,19 @@ const SEG_LEN_MAX_RATIO = 0.88;         // Segment length ratio at high difficul
 const BASE_SEGMENT_LEN = 240;           // Base segment length in pixels
 const INTRA_LEVEL_GROWTH = 0.14;        // Difficulty rises gently inside each level
 const INTRA_LEVEL_EASY_FRACTION = 0.15; // First 15% of each level starts easier
-const SQUEEZE_GAP_RATIO = 4.8;         // Squeeze section gap = 4.8 * carH (~192px)
-const MOVE_RAIL_AMP_MIN = 12;           // Moving rail min amplitude in px
-const MOVE_RAIL_AMP_MAX = 24;           // Moving rail max amplitude in px
-const MOVE_RAIL_SPEED_SLOW = 0.9;
-const MOVE_RAIL_SPEED_FAST = 1.4;
+const SQUEEZE_GAP_RATIO = 3.45;         // Squeeze section gap = about 3.45 * carH (~138px)
+const MOVE_RAIL_AMP_MIN = 10;           // Moving rail min amplitude in px
+const MOVE_RAIL_AMP_MAX = 0.5 * CAR_HITBOX_H; // Amplitude at most 0.5 * carH (20px)
+const MOVE_RAIL_SPEED_SLOW = 1.1;       // Slow gentle sine motion (Stage 4)
+const MOVE_RAIL_SPEED_FAST = 2.2;       // Faster moving rails (Stage 7)
 
 const START_ROAD_START = -100, START_ROAD_END = 500;
 const TUNNEL_START_X = START_ROAD_END;
 
 // Dynamic level stage length
-const LEVEL_BASE_WIDTHS = 12;
-const LEVEL_GROWTH = 0.35;
-const LEVEL_MAX_EXTRA = 8;
+const LEVEL_BASE_WIDTHS = 14;
+const LEVEL_GROWTH = 0.4;
+const LEVEL_MAX_EXTRA = 10;
 
 function getTunnelLength(lvl) {
   const L = lvl || 1;
@@ -412,8 +431,8 @@ const STOP_TIME = 1.2;
 let FINISH_ROAD_LEN = FINISH_ROAD_LENGTH;
 let FINISH_ROAD_X = TUNNEL_END_X + CALM_OPEN_GAP;
 let FINISH_ROAD_END = FINISH_ROAD_X + FINISH_ROAD_LENGTH;
-let FINISH_LINE_X = FINISH_ROAD_X + FINISH_ROAD_LENGTH * FINISH_LINE_AT;
-let LEVEL_LENGTH = FINISH_LINE_X - CAR_X;
+let finishLineWorldX = FINISH_ROAD_X + FINISH_ROAD_LENGTH * FINISH_LINE_AT;
+let LEVEL_LENGTH = FINISH_ROAD_X - CAR_X;
 
 const RETRY_FROM_LEVEL_START = true;
 
@@ -477,9 +496,16 @@ function mulberry32(a) {
 // LEVEL BACKGROUND & CAR PRELOADER
 // ==========================================
 const LEVEL_PICTURE_URLS = [
-  'image_39e1ec82.png' // Level 1 custom bright picture
+  'image_e46b893e.png' // Custom flying islands background picture
 ];
-const CAR_IMAGE_URL = 'image_dc734168.png';
+const CAR_IMAGE_URL = 'image_5d751a23.png';
+const COIN_10_IMAGE_URL = 'coin_10.png';
+const COIN_50_IMAGE_URL = 'coin_50.png';
+const COIN_100_IMAGE_URL = 'coin_100.png';
+
+let coin10LoadedImg = null;
+let coin50LoadedImg = null;
+let coin100LoadedImg = null;
 
 let carImgLoaded = false;
 let carImgFailed = false;
@@ -495,7 +521,7 @@ let currentAngularSpeed = 0;
 
 const preloadedPictures = [];
 let finishedAssetsCount = 0;
-const totalAssets = LEVEL_PICTURE_URLS.length + 1; // backgrounds + car image
+const totalAssets = LEVEL_PICTURE_URLS.length + 1 + 3; // backgrounds + car + 3 coin types
 let assetsFinished = false;
 let loadingErrorMsg = null;
 let finishFillTimer = 0;
@@ -555,50 +581,79 @@ function processCarImage(img) {
   try {
     const origW = img.naturalWidth || img.width;
     const origH = img.naturalHeight || img.height;
-
     const offCanv = document.createElement('canvas');
     offCanv.width = origW;
     offCanv.height = origH;
     const offCtx = offCanv.getContext('2d');
     offCtx.drawImage(img, 0, 0);
-
     const imgData = offCtx.getImageData(0, 0, origW, origH);
     const d = imgData.data;
 
-    // Green Chroma Key with smooth edge blending & despill:
-    // Do not remove any yellow pixels of the car body.
-    // Only remove pixels where green is clearly higher than both red and blue.
-    const threshLow = 30;
-    const threshHigh = 65;
+    let hasTransparentAreas = false;
+    for (let i = 3; i < d.length; i += 4) {
+      if (d[i] < 200) { hasTransparentAreas = true; break; }
+    }
 
-    for (let i = 0; i < d.length; i += 4) {
-      const r = d[i];
-      const g = d[i + 1];
-      const b = d[i + 2];
-      const maxRB = Math.max(r, b);
-      const diff = g - maxRB;
+    if (!hasTransparentAreas) {
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+        const diffR = g - r;
+        const diffB = g - b;
+        const minDiff = Math.min(diffR, diffB);
+        if (minDiff >= 50) {
+          d[i + 3] = 0;
+        } else if (minDiff > 35) {
+          const factor = (minDiff - 35) / 15.0;
+          d[i + 3] = Math.round(255 * (1.0 - factor));
+        } else {
+          d[i + 3] = 255;
+        }
+      }
 
-      if (diff >= threshHigh) {
-        // Pure green background -> fully transparent
-        d[i + 3] = 0;
-      } else if (diff > threshLow) {
-        // Soft edge blending
-        const factor = (diff - threshLow) / (threshHigh - threshLow);
-        d[i + 3] = Math.round(255 * (1 - factor));
-        // Despill green fringe at boundary
-        d[i + 1] = maxRB;
-      } else {
-        // Never remove or alter yellow body pixels (where r is high).
-        // Only despill dark/neutral edges if green is slightly above red & blue:
-        if (diff > 12 && r < 120) {
-          d[i + 1] = maxRB;
+      const initialAlpha = new Uint8Array(origW * origH);
+      for (let i = 0; i < initialAlpha.length; i++) {
+        initialAlpha[i] = d[i * 4 + 3];
+      }
+
+      for (let y = 0; y < origH; y++) {
+        for (let x = 0; x < origW; x++) {
+          const idx = (y * origW + x) * 4;
+          if (d[idx + 3] === 0) continue;
+          let isEdge = false;
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < origW && ny >= 0 && ny < origH) {
+                if (initialAlpha[ny * origW + nx] < 128) {
+                  isEdge = true;
+                  break;
+                }
+              }
+            }
+            if (isEdge) break;
+          }
+          const r = d[idx];
+          const g = d[idx + 1];
+          const b = d[idx + 2];
+          if (b <= g) {
+            const maxRB = Math.max(r, b);
+            if (g > maxRB + 10) {
+              if (isEdge) {
+                d[idx + 1] = maxRB;
+              } else if (g > maxRB + 20) {
+                d[idx + 1] = maxRB;
+              }
+            }
+          }
         }
       }
     }
-
     offCtx.putImageData(imgData, 0, 0);
 
-    // Auto-trim empty transparent space so tires sit at exact bottom edge
     let minX = origW, maxX = 0, minY = origH, maxY = 0;
     for (let y = 0; y < origH; y++) {
       for (let x = 0; x < origW; x++) {
@@ -611,22 +666,18 @@ function processCarImage(img) {
         }
       }
     }
-
     if (minX <= maxX && minY <= maxY) {
       const trimW = maxX - minX + 1;
       const trimH = maxY - minY + 1;
-
       const tCanv = document.createElement('canvas');
       tCanv.width = trimW;
       tCanv.height = trimH;
       const tCtx = tCanv.getContext('2d');
       tCtx.drawImage(offCanv, minX, minY, trimW, trimH, 0, 0, trimW, trimH);
-
       trimmedCarCanvas = tCanv;
       CAR_DRAW_H = Math.round(CAR_DRAW_W * (trimH / trimW));
       CAR_REST_Y = ROAD_TOP + 3;
       if (st === 'ready') cy = CAR_REST_Y;
-
       buildWheelSprites();
     }
     carImgLoaded = true;
@@ -1009,6 +1060,29 @@ function initAssetPreloading() {
       .finally(() => {
         markAssetFinished();
       });
+
+    // 3. Preload 3D Coin images (10, 50, 100) concurrently
+    const coinDefs = [
+      { id: 10, url: COIN_10_IMAGE_URL },
+      { id: 50, url: COIN_50_IMAGE_URL },
+      { id: 100, url: COIN_100_IMAGE_URL }
+    ];
+
+    coinDefs.forEach(cd => {
+      loadImageWithTimeout(cd.url)
+        .then(img => {
+          if (cd.id === 10) coin10LoadedImg = img;
+          if (cd.id === 50) coin50LoadedImg = img;
+          if (cd.id === 100) coin100LoadedImg = img;
+          prerenderCoinFrames(coin10LoadedImg, coin50LoadedImg, coin100LoadedImg);
+        })
+        .catch(err => {
+          console.warn('Coin image load failed:', cd.url, err);
+        })
+        .finally(() => {
+          markAssetFinished();
+        });
+    });
 
   } catch (err) {
     console.error('initAssetPreloading error:', err);
@@ -1554,7 +1628,10 @@ function generateLevelConfig(level, prev) {
   const spikeSat = Math.round(range(75, 95));
   const spikeLit = Math.round(range(44, 56));
   const spikeColor = { h: H, s: spikeSat, l: spikeLit };
-  const railColor = `hsl(${H}, 35%, 52%)`;
+  const railColor = (stage && stage.railColor) ? stage.railColor : `hsl(${H}, 35%, 52%)`;
+  const accentColor = (stage && stage.accent) ? stage.accent : `hsl(${H}, 90%, 50%)`;
+  const glowColor = accentColor;
+  const spikeStyle = (stage && stage.spikeStyle) ? stage.spikeStyle : 'steel cone studs';
 
   return {
     level,
@@ -1573,8 +1650,10 @@ function generateLevelConfig(level, prev) {
     bend,
     railStyle,
     railColor,
-    accentColor: `hsl(${H}, 90%, 50%)`,
-    glowColor: `hsl(${H}, 95%, 60%)`
+    accentColor,
+    glowColor,
+    spikeStyle,
+    stage
   };
 }
 
@@ -1612,76 +1691,659 @@ function roundRect(c, x, y, w, h, r) {
   c.closePath();
 }
 
-function renderSpikeToCanvas(canvas, isTop, h, cfg) {
+function hexToRgba(hex, alpha = 1) {
+  if (!hex || typeof hex !== 'string') return `rgba(255, 255, 255, ${alpha})`;
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x + x).join('');
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return `rgba(255, 255, 255, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+let stageSpikeCanvases = [];
+
+function renderStageSpike(canvas, isTop, h, stage, variant = 0) {
   const sCtx = canvas.getContext('2d');
   sCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const cx = 18;
-  const baseY = isTop ? 2 : 46;
+  const cx = 20;
+  const baseY = isTop ? 4 : 48;
   const dir = isTop ? 1 : -1;
   const tipY = baseY + dir * h;
-  const w = Math.min(16, Math.max(9, cfg.width));
-  const bendOffset = (cfg.bend || 0) * (h * 0.22);
-  const tipX = cx + bendOffset;
+  const w = (h <= 14) ? 11 : ((h <= 24) ? 13 : 15);
+  const halfW = w / 2;
+  const tipX = cx;
 
-  const H = cfg.spikeColor.h, S = cfg.spikeColor.s, L = cfg.spikeColor.l;
-  const colBase = `hsl(${H}, ${S}%, ${L}%)`;
-  const colLight = `hsl(${H}, ${Math.max(10, S - 15)}%, ${Math.min(95, L + 28)}%)`;
-  const colDark = `hsl(${H}, ${Math.min(100, S + 10)}%, ${Math.max(14, L - 22)}%)`;
-  const outlineColor = '#181e28';
+  const style = (stage && stage.spikeStyle) ? stage.spikeStyle : 'steel cone studs';
+  const accent = (stage && stage.accent) ? stage.accent : '#ff8a1f';
+  const accent2 = (stage && stage.accentSecondary) ? stage.accentSecondary : '#ff3fb0';
+  const outlineColor = '#0a0f1d';
 
   sCtx.save();
 
-  // 3D Facets
-  sCtx.fillStyle = colLight;
+  // 1. Soft glow around the tips in the stage's accent color (Requirement 1)
+  const glowR = Math.min(11, Math.max(7, h * 0.42));
+  const glowGrad = sCtx.createRadialGradient(tipX, tipY, 0, tipX, tipY, glowR);
+  glowGrad.addColorStop(0, hexToRgba(accent, 0.90));
+  glowGrad.addColorStop(0.50, hexToRgba(accent, 0.40));
+  glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  sCtx.fillStyle = glowGrad;
   sCtx.beginPath();
-  sCtx.moveTo(cx - w / 2, baseY);
-  sCtx.lineTo(tipX, tipY);
-  sCtx.lineTo(cx, baseY);
-  sCtx.closePath();
+  sCtx.arc(tipX, tipY, glowR, 0, Math.PI * 2);
   sCtx.fill();
 
-  sCtx.fillStyle = colDark;
-  sCtx.beginPath();
-  sCtx.moveTo(cx, baseY);
-  sCtx.lineTo(tipX, tipY);
-  sCtx.lineTo(cx + w / 2, baseY);
-  sCtx.closePath();
-  sCtx.fill();
+  if (style === 'steel cone studs') {
+    // Style 1: Desert Highway - Steel cone studs
+    const gLight = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+    gLight.addColorStop(0, '#f8fafc');
+    gLight.addColorStop(0.5, '#cbd5e1');
+    gLight.addColorStop(1, '#94a3b8');
+    sCtx.fillStyle = gLight;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx, baseY);
+    sCtx.closePath();
+    sCtx.fill();
 
-  // Thin dark outline
-  sCtx.strokeStyle = outlineColor;
-  sCtx.lineWidth = 1.4;
-  sCtx.lineJoin = 'round';
-  sCtx.beginPath();
-  sCtx.moveTo(cx - w / 2, baseY);
-  sCtx.lineTo(tipX, tipY);
-  sCtx.lineTo(cx + w / 2, baseY);
-  sCtx.stroke();
+    const gDark = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+    gDark.addColorStop(0, '#64748b');
+    gDark.addColorStop(0.6, '#334155');
+    gDark.addColorStop(1, '#1e293b');
+    sCtx.fillStyle = gDark;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.closePath();
+    sCtx.fill();
 
-  if (cfg.collarRing) {
+    // Riveted base collar
     const crH = 3.5;
     const crY = isTop ? baseY : baseY - crH;
-    sCtx.fillStyle = colBase;
+    sCtx.fillStyle = '#475569';
     sCtx.fillRect(cx - (w + 4) / 2, crY, w + 4, crH);
-    sCtx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    sCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     sCtx.fillRect(cx - (w + 4) / 2, crY, w + 4, 1);
+    sCtx.fillStyle = '#0f172a';
+    sCtx.beginPath(); sCtx.arc(cx, crY + crH / 2, 1.2, 0, Math.PI * 2); sCtx.fill();
+
+    // Glossy 3D highlight stripe on left side
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    sCtx.lineWidth = 1.4;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.45, baseY + dir * 3);
+    sCtx.lineTo(tipX - 0.8, tipY - dir * 2);
+    sCtx.stroke();
+
+    // Exact cone outline
     sCtx.strokeStyle = outlineColor;
-    sCtx.lineWidth = 1;
-    sCtx.strokeRect(cx - (w + 4) / 2, crY, w + 4, crH);
+    sCtx.lineWidth = 1.3;
+    sCtx.lineJoin = 'round';
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.stroke();
+
+    // White specular glint at tip
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+    sCtx.fill();
+  } else if (style === 'glowing blade spikes') {
+    // Style 2: Neon City - Glowing blade spikes
+    const shoulderY = baseY + dir * (h * 0.28);
+    const shW = halfW * 0.9;
+
+    const gBladeL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+    gBladeL.addColorStop(0, '#e0f2fe');
+    gBladeL.addColorStop(0.4, '#38bdf8');
+    gBladeL.addColorStop(1, '#0284c7');
+    sCtx.fillStyle = gBladeL;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(cx - shW, shoulderY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    const gBladeR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+    gBladeR.addColorStop(0, '#312e81');
+    gBladeR.addColorStop(0.5, '#1e1b4b');
+    gBladeR.addColorStop(1, '#0f172a');
+    sCtx.fillStyle = gBladeR;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + shW, shoulderY);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Glossy 3D highlight stripe
+    sCtx.strokeStyle = '#ffffff';
+    sCtx.lineWidth = 1.3;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, baseY + dir * 2);
+    sCtx.lineTo(tipX, tipY - dir * 2);
+    sCtx.stroke();
+
+    // Secondary magenta neon line
+    sCtx.strokeStyle = accent2;
+    sCtx.lineWidth = 1.2;
+    sCtx.beginPath();
+    sCtx.moveTo(cx + shW, shoulderY);
+    sCtx.lineTo(tipX + 0.5, tipY - dir * 2);
+    sCtx.stroke();
+
+    // Exact blade outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1.3;
+    sCtx.lineJoin = 'round';
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(cx - shW, shoulderY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + shW, shoulderY);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.stroke();
+
+    // White specular glint at tip
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+    sCtx.fill();
+  } else if (style === 'ice crystal spikes') {
+    // Style 3: Frozen Peaks - Ice crystal spikes
+    const midY = baseY + dir * (h * 0.45);
+    const ridgeX = cx - halfW * 0.15;
+
+    const gIceL = sCtx.createLinearGradient(cx - halfW, baseY, ridgeX, midY);
+    gIceL.addColorStop(0, '#ffffff');
+    gIceL.addColorStop(0.5, '#e0f7fa');
+    gIceL.addColorStop(1, '#a5f3fc');
+    sCtx.fillStyle = gIceL;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(cx - halfW * 0.85, midY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(ridgeX, midY);
+    sCtx.lineTo(cx - halfW * 0.3, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    const gIceC = sCtx.createLinearGradient(ridgeX, baseY, cx, tipY);
+    gIceC.addColorStop(0, '#bae6fd');
+    gIceC.addColorStop(0.5, '#38bdf8');
+    gIceC.addColorStop(1, '#0284c7');
+    sCtx.fillStyle = gIceC;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.3, baseY);
+    sCtx.lineTo(ridgeX, midY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + halfW * 0.2, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    const gIceR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+    gIceR.addColorStop(0, '#1e3a8a');
+    gIceR.addColorStop(0.6, '#172554');
+    gIceR.addColorStop(1, '#0c1938');
+    sCtx.fillStyle = gIceR;
+    sCtx.beginPath();
+    sCtx.moveTo(cx + halfW * 0.2, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + halfW * 0.85, midY);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Glossy 3D facet highlight stripe
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    sCtx.lineWidth = 1.3;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.3, baseY + dir * 2);
+    sCtx.lineTo(ridgeX, midY);
+    sCtx.lineTo(tipX, tipY - dir * 1.5);
+    sCtx.stroke();
+
+    // Exact faceted outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1.3;
+    sCtx.lineJoin = 'round';
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(cx - halfW * 0.85, midY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + halfW * 0.85, midY);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.stroke();
+
+    // White specular glint at tip
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+    sCtx.fill();
+  } else if (style === 'black rock spikes with glowing tips') {
+    // Style 4: Volcano Wasteland - Black rock spikes with glowing tips
+    const j1X = cx - halfW * 0.7, j1Y = baseY + dir * (h * 0.35);
+    const j2X = cx + halfW * 0.8, j2Y = baseY + dir * (h * 0.55);
+
+    const gRockL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+    gRockL.addColorStop(0, '#475569');
+    gRockL.addColorStop(0.4, '#334155');
+    gRockL.addColorStop(1, '#1e293b');
+    sCtx.fillStyle = gRockL;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(j1X, j1Y);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    const gRockR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+    gRockR.addColorStop(0, '#18181b');
+    gRockR.addColorStop(0.6, '#09090b');
+    gRockR.addColorStop(1, '#000000');
+    sCtx.fillStyle = gRockR;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(j2X, j2Y);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Molten magma highlight stripe
+    sCtx.strokeStyle = '#ffedd5';
+    sCtx.lineWidth = 1.3;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - 1, baseY + dir * (h * 0.2));
+    sCtx.lineTo(cx + 1, baseY + dir * (h * 0.6));
+    sCtx.lineTo(tipX, tipY);
+    sCtx.stroke();
+
+    // Glossy specular line on left facet
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    sCtx.lineWidth = 1.2;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW + 1, baseY + dir * 2);
+    sCtx.lineTo(j1X, j1Y);
+    sCtx.stroke();
+
+    // Exact jagged rock outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1.3;
+    sCtx.lineJoin = 'round';
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(j1X, j1Y);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(j2X, j2Y);
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.stroke();
+
+    // Incandescent glint at glowing tip
+    sCtx.fillStyle = '#fff7ed';
+    sCtx.beginPath();
+    sCtx.arc(tipX, tipY - dir * 1.2, 1.4, 0, Math.PI * 2);
+    sCtx.fill();
+  } else if (style === 'yellow saw-tooth and fork spikes') {
+    // Style 5: Cyber Factory - Saw-tooth (var 0) and Fork (var 1)
+    if (variant === 1) {
+      // Dual-prong fork stud
+      const stemH = h * 0.42;
+      const forkStemY = baseY + dir * stemH;
+      const prongW = halfW * 0.38;
+
+      sCtx.fillStyle = '#ca8a04';
+      sCtx.fillRect(cx - halfW, isTop ? baseY : baseY - stemH, w, stemH);
+
+      const gForkL = sCtx.createLinearGradient(cx - halfW, forkStemY, cx - halfW + prongW, tipY);
+      gForkL.addColorStop(0, '#fef08a');
+      gForkL.addColorStop(1, '#eab308');
+      sCtx.fillStyle = gForkL;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, forkStemY);
+      sCtx.lineTo(cx - halfW * 0.7, tipY);
+      sCtx.lineTo(cx - halfW + prongW, forkStemY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      const gForkR = sCtx.createLinearGradient(cx + halfW - prongW, forkStemY, cx + halfW, tipY);
+      gForkR.addColorStop(0, '#ca8a04');
+      gForkR.addColorStop(1, '#854d0e');
+      sCtx.fillStyle = gForkR;
+      sCtx.beginPath();
+      sCtx.moveTo(cx + halfW - prongW, forkStemY);
+      sCtx.lineTo(cx + halfW * 0.7, tipY);
+      sCtx.lineTo(cx + halfW, forkStemY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Industrial rivets on base
+      sCtx.fillStyle = '#1e293b';
+      sCtx.beginPath(); sCtx.arc(cx - halfW * 0.5, baseY + dir * (stemH * 0.5), 1.1, 0, Math.PI * 2); sCtx.fill();
+      sCtx.beginPath(); sCtx.arc(cx + halfW * 0.5, baseY + dir * (stemH * 0.5), 1.1, 0, Math.PI * 2); sCtx.fill();
+
+      // Highlight stripe on left prong
+      sCtx.strokeStyle = '#ffffff';
+      sCtx.lineWidth = 1.3;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW + 1, forkStemY);
+      sCtx.lineTo(cx - halfW * 0.7, tipY - dir * 1.5);
+      sCtx.stroke();
+
+      // Exact dual-prong fork outline
+      sCtx.strokeStyle = outlineColor;
+      sCtx.lineWidth = 1.3;
+      sCtx.lineJoin = 'round';
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, baseY);
+      sCtx.lineTo(cx - halfW, forkStemY);
+      sCtx.lineTo(cx - halfW * 0.7, tipY);
+      sCtx.lineTo(cx - halfW + prongW, forkStemY);
+      sCtx.lineTo(cx + halfW - prongW, forkStemY);
+      sCtx.lineTo(cx + halfW * 0.7, tipY);
+      sCtx.lineTo(cx + halfW, forkStemY);
+      sCtx.lineTo(cx + halfW, baseY);
+      sCtx.stroke();
+
+      // Glints on both fork prong tips
+      sCtx.fillStyle = '#ffffff';
+      sCtx.beginPath(); sCtx.arc(cx - halfW * 0.7, tipY - dir * 1.2, 1.2, 0, Math.PI * 2); sCtx.fill();
+      sCtx.beginPath(); sCtx.arc(cx + halfW * 0.7, tipY - dir * 1.2, 1.2, 0, Math.PI * 2); sCtx.fill();
+    } else {
+      // Industrial saw-tooth stud
+      const gToothL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+      gToothL.addColorStop(0, '#fef08a');
+      gToothL.addColorStop(0.5, '#facc15');
+      gToothL.addColorStop(1, '#eab308');
+      sCtx.fillStyle = gToothL;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, baseY);
+      sCtx.lineTo(tipX, tipY);
+      sCtx.lineTo(cx + 1, baseY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      const gToothR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+      gToothR.addColorStop(0, '#a16207');
+      gToothR.addColorStop(0.6, '#854d0e');
+      gToothR.addColorStop(1, '#451a03');
+      sCtx.fillStyle = gToothR;
+      sCtx.beginPath();
+      sCtx.moveTo(cx + 1, baseY);
+      sCtx.lineTo(tipX, tipY);
+      sCtx.lineTo(cx + halfW, baseY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Mechanical cutout notch
+      sCtx.fillStyle = '#0f172a';
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW + 2, baseY + dir * 3);
+      sCtx.lineTo(cx - halfW + 6, baseY + dir * 3);
+      sCtx.lineTo(cx - halfW + 4, baseY + dir * 6);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Glossy highlight stripe
+      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      sCtx.lineWidth = 1.3;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW * 0.4, baseY + dir * 4);
+      sCtx.lineTo(tipX - 0.8, tipY - dir * 2);
+      sCtx.stroke();
+
+      // Exact saw-tooth outline
+      sCtx.strokeStyle = outlineColor;
+      sCtx.lineWidth = 1.3;
+      sCtx.lineJoin = 'round';
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, baseY);
+      sCtx.lineTo(tipX, tipY);
+      sCtx.lineTo(cx + halfW, baseY);
+      sCtx.stroke();
+
+      // White specular glint at tip
+      sCtx.fillStyle = '#ffffff';
+      sCtx.beginPath();
+      sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+      sCtx.fill();
+    }
+  } else if (style === 'thorn and claw spikes') {
+    // Style 6: Alien Jungle - Thorn (violet, var 0) and Claw (emerald, var 1)
+    if (variant === 1) {
+      // Emerald claw
+      const curveX = cx - halfW * 0.45;
+      const curveY = baseY + dir * (h * 0.5);
+
+      const gClawL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+      gClawL.addColorStop(0, '#bbf7d0');
+      gClawL.addColorStop(0.4, '#4ade80');
+      gClawL.addColorStop(1, '#16a34a');
+      sCtx.fillStyle = gClawL;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, baseY);
+      sCtx.quadraticCurveTo(curveX - 2, curveY, tipX, tipY);
+      sCtx.lineTo(cx, baseY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      const gClawR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+      gClawR.addColorStop(0, '#15803d');
+      gClawR.addColorStop(0.6, '#14532d');
+      gClawR.addColorStop(1, '#052e16');
+      sCtx.fillStyle = gClawR;
+      sCtx.beginPath();
+      sCtx.moveTo(cx, baseY);
+      sCtx.lineTo(tipX, tipY);
+      sCtx.quadraticCurveTo(curveX + halfW * 0.8, curveY, cx + halfW, baseY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Glossy highlight curve
+      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      sCtx.lineWidth = 1.3;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW + 1, baseY + dir * 3);
+      sCtx.quadraticCurveTo(curveX, curveY, tipX - 0.5, tipY - dir * 2);
+      sCtx.stroke();
+
+      // Exact claw outline
+      sCtx.strokeStyle = outlineColor;
+      sCtx.lineWidth = 1.3;
+      sCtx.lineJoin = 'round';
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, baseY);
+      sCtx.quadraticCurveTo(curveX - 2, curveY, tipX, tipY);
+      sCtx.quadraticCurveTo(curveX + halfW * 0.8, curveY, cx + halfW, baseY);
+      sCtx.stroke();
+
+      // White specular glint at tip
+      sCtx.fillStyle = '#ffffff';
+      sCtx.beginPath();
+      sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+      sCtx.fill();
+    } else {
+      // Violet thorn
+      const curveX = cx + halfW * 0.4;
+      const curveY = baseY + dir * (h * 0.48);
+
+      const gThornL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+      gThornL.addColorStop(0, '#f3e8ff');
+      gThornL.addColorStop(0.4, '#c084fc');
+      gThornL.addColorStop(1, '#9333ea');
+      sCtx.fillStyle = gThornL;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, baseY);
+      sCtx.quadraticCurveTo(curveX - halfW * 0.8, curveY, tipX, tipY);
+      sCtx.lineTo(cx, baseY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      const gThornR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+      gThornR.addColorStop(0, '#6b21a8');
+      gThornR.addColorStop(0.6, '#581c87');
+      gThornR.addColorStop(1, '#2e1065');
+      sCtx.fillStyle = gThornR;
+      sCtx.beginPath();
+      sCtx.moveTo(cx, baseY);
+      sCtx.lineTo(tipX, tipY);
+      sCtx.quadraticCurveTo(curveX + 2, curveY, cx + halfW, baseY);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Glossy highlight curve
+      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      sCtx.lineWidth = 1.3;
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW * 0.4, baseY + dir * 3);
+      sCtx.quadraticCurveTo(curveX - halfW * 0.5, curveY, tipX - 0.8, tipY - dir * 2);
+      sCtx.stroke();
+
+      // Exact thorn outline
+      sCtx.strokeStyle = outlineColor;
+      sCtx.lineWidth = 1.3;
+      sCtx.lineJoin = 'round';
+      sCtx.beginPath();
+      sCtx.moveTo(cx - halfW, baseY);
+      sCtx.quadraticCurveTo(curveX - halfW * 0.8, curveY, tipX, tipY);
+      sCtx.quadraticCurveTo(curveX + 2, curveY, cx + halfW, baseY);
+      sCtx.stroke();
+
+      // White specular glint at tip
+      sCtx.fillStyle = '#ffffff';
+      sCtx.beginPath();
+      sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+      sCtx.fill();
+    }
+  } else if (style === 'coral spikes') {
+    // Style 7: Deep Ocean Ruins - Coral spikes
+    const flute1Y = baseY + dir * (h * 0.35);
+    const flute2Y = baseY + dir * (h * 0.7);
+
+    const gCoralL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+    gCoralL.addColorStop(0, '#ccfbf1');
+    gCoralL.addColorStop(0.4, '#5eead4');
+    gCoralL.addColorStop(1, '#14b8a6');
+    sCtx.fillStyle = gCoralL;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.bezierCurveTo(cx - halfW * 0.8, flute1Y, cx - halfW * 0.4, flute2Y, tipX, tipY);
+    sCtx.lineTo(cx, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    const gCoralR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+    gCoralR.addColorStop(0, '#0f766e');
+    gCoralR.addColorStop(0.6, '#042f2e');
+    gCoralR.addColorStop(1, '#021a1a');
+    sCtx.fillStyle = gCoralR;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.bezierCurveTo(cx + halfW * 0.4, flute2Y, cx + halfW * 0.8, flute1Y, cx + halfW, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Bioluminescent polyps
+    sCtx.fillStyle = '#a7f3d0';
+    sCtx.beginPath(); sCtx.arc(cx - halfW * 0.45, flute1Y, 1.2, 0, Math.PI * 2); sCtx.fill();
+    sCtx.beginPath(); sCtx.arc(cx - halfW * 0.25, flute2Y, 1.1, 0, Math.PI * 2); sCtx.fill();
+    sCtx.fillStyle = '#115e59';
+    sCtx.beginPath(); sCtx.arc(cx + halfW * 0.45, flute1Y, 1.2, 0, Math.PI * 2); sCtx.fill();
+
+    // Glossy highlight stripe
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    sCtx.lineWidth = 1.3;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.35, baseY + dir * 3);
+    sCtx.lineTo(tipX - 0.8, tipY - dir * 2);
+    sCtx.stroke();
+
+    // Exact fluted coral outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1.3;
+    sCtx.lineJoin = 'round';
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.bezierCurveTo(cx - halfW * 0.8, flute1Y, cx - halfW * 0.4, flute2Y, tipX, tipY);
+    sCtx.bezierCurveTo(cx + halfW * 0.4, flute2Y, cx + halfW * 0.8, flute1Y, cx + halfW, baseY);
+    sCtx.stroke();
+
+    // White specular glint at tip
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+    sCtx.fill();
+  } else if (style === 'energy crystal spikes') {
+    // Style 8: Space Station - Energy crystal spikes
+    const gEnergyL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
+    gEnergyL.addColorStop(0, '#f5d0fe');
+    gEnergyL.addColorStop(0.4, '#c084fc');
+    gEnergyL.addColorStop(1, '#9333ea');
+    sCtx.fillStyle = gEnergyL;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(cx - halfW * 0.6, baseY + dir * (h * 0.4));
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    const gEnergyR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
+    gEnergyR.addColorStop(0, '#4a044e');
+    gEnergyR.addColorStop(0.6, '#2e1065');
+    gEnergyR.addColorStop(1, '#090514');
+    sCtx.fillStyle = gEnergyR;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, baseY);
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + halfW * 0.6, baseY + dir * (h * 0.4));
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Base emitter collar
+    sCtx.fillStyle = '#1e1b4b';
+    sCtx.fillRect(cx - (w + 2) / 2, isTop ? baseY : baseY - 3, w + 2, 3);
+    sCtx.fillStyle = accent;
+    sCtx.fillRect(cx - 2, isTop ? baseY + 1 : baseY - 2, 4, 1.5);
+
+    // Glowing energy facet line
+    sCtx.strokeStyle = '#ffffff';
+    sCtx.lineWidth = 1.3;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, baseY + dir * 4);
+    sCtx.lineTo(tipX, tipY - dir * 1.5);
+    sCtx.stroke();
+
+    // Exact crystal outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1.3;
+    sCtx.lineJoin = 'round';
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, baseY);
+    sCtx.lineTo(cx - halfW * 0.6, baseY + dir * (h * 0.4));
+    sCtx.lineTo(tipX, tipY);
+    sCtx.lineTo(cx + halfW * 0.6, baseY + dir * (h * 0.4));
+    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.stroke();
+
+    // White specular glint at tip
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+    sCtx.fill();
   }
-
-  sCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-  sCtx.lineWidth = 1.3;
-  sCtx.beginPath();
-  sCtx.moveTo(cx - w * 0.22, baseY + dir * 3);
-  sCtx.lineTo(tipX - 1, tipY - dir * 2);
-  sCtx.stroke();
-
-  sCtx.fillStyle = '#ffffff';
-  sCtx.beginPath();
-  sCtx.arc(tipX, tipY - dir * 1.5, 1.3, 0, 6.28);
-  sCtx.fill();
 
   sCtx.restore();
 }
@@ -1705,20 +2367,43 @@ function drawFluffyClouds(pCtx, x, y, scale = 1, alpha = 0.85, tint = '#ffffff')
   pCtx.restore();
 }
 
-function prerenderSpikes(cfg) {
+// Pre-render spike sprites once per stage and reuse them (Requirement 4 & 5)
+function prerenderAllStageSpikes() {
+  stageSpikeCanvases.length = 0;
   const sizes = { small: 12, medium: 22, big: 36 };
-  for (const sKey in sizes) {
-    const h = sizes[sKey];
-    for (const dir of ['top', 'bot']) {
-      const key = `${sKey}_${dir}`;
-      if (!spikeCanvases[key]) {
-        spikeCanvases[key] = document.createElement('canvas');
-        spikeCanvases[key].width = 36;
-        spikeCanvases[key].height = 48;
+
+  for (let sIdx = 0; sIdx < STAGES.length; sIdx++) {
+    const stage = STAGES[sIdx];
+    const stageMap = {};
+    const hasVariants = (sIdx === 4 || sIdx === 5);
+    const variants = hasVariants ? [0, 1] : [0];
+
+    for (const sKey in sizes) {
+      const h = sizes[sKey];
+      for (const dir of ['top', 'bot']) {
+        for (const v of variants) {
+          const key = hasVariants ? `${sKey}_${dir}_${v}` : `${sKey}_${dir}`;
+          const canvas = document.createElement('canvas');
+          canvas.width = 40;
+          canvas.height = 52;
+          renderStageSpike(canvas, dir === 'top', h, stage, v);
+          stageMap[key] = canvas;
+          if (hasVariants && v === 0) {
+            stageMap[`${sKey}_${dir}`] = canvas;
+          }
+        }
       }
-      renderSpikeToCanvas(spikeCanvases[key], dir === 'top', h, cfg);
     }
+    stageSpikeCanvases.push(stageMap);
   }
+}
+
+function prerenderSpikes(cfg) {
+  if (!stageSpikeCanvases || stageSpikeCanvases.length === 0) {
+    prerenderAllStageSpikes();
+  }
+  const stageIdx = (getStageNumber(curLevel) - 1) % STAGES.length;
+  spikeCanvases = stageSpikeCanvases[stageIdx] || {};
 }
 
 // ==========================================
@@ -2578,419 +3263,136 @@ const coinFloatTexts = [];
 
 function getCoinSprite(type, frameIdx) {
   const f = Math.max(0, Math.min(7, Math.floor(frameIdx || 0)));
-  if (type === 'gem') return gemFrames[f];
-  if (type === 'gold') return goldFrames[f];
-  if (type === 'silver') return silverFrames[f];
+  if (type === 'coin_100' || type === 'gem') return gemFrames[f];
+  if (type === 'coin_50' || type === 'gold' || type === 'silver') return goldFrames[f] || silverFrames[f];
   return bronzeFrames[f] || coinFrames[f];
 }
 
-function renderBronzeStarOnCtx(fCtx, cx, cy, r) {
-  // Stars are removed from all coins per user request
-}
+function renderCustomCoinFrame(fCtx, cx, cy, radius, wScale, img, fallbackNum, glowColors, rimColor, frameIdx) {
+  fCtx.save();
+  fCtx.translate(cx, cy);
 
-function prerenderCoinFrames() {
-  bronzeFrames.length = 0;
-  silverFrames.length = 0;
-  goldFrames.length = 0;
-  gemFrames.length = 0;
+  // Soft radiant aura
+  const glow = fCtx.createRadialGradient(0, 0, radius * 0.3, 0, 0, radius + 6);
+  glow.addColorStop(0, glowColors[0]);
+  glow.addColorStop(0.65, glowColors[1]);
+  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  fCtx.fillStyle = glow;
+  fCtx.beginPath();
+  fCtx.arc(0, 0, radius + 6, 0, Math.PI * 2);
+  fCtx.fill();
 
-  // 1. VIBRANT 24K GOLD COIN: value 5, glorious arcade gold with glowing aura, beveled rim & bold "5" (80% of all coins)
-  const bSz = Math.ceil(BRONZE_RADIUS * 2 + 16);
-  const bcx = bSz / 2, bcy = bSz / 2;
-  for (let i = 0; i < 8; i++) {
-    const canv = document.createElement('canvas');
-    canv.width = bSz;
-    canv.height = bSz;
-    const fCtx = canv.getContext('2d');
-
-    const ang = (i / 8) * Math.PI;
-    const cosVal = Math.cos(ang);
-    const wScale = Math.max(0.18, Math.abs(cosVal));
-
-    fCtx.save();
-    fCtx.translate(bcx, bcy);
-
-    // Warm golden glow aura
-    const glow = fCtx.createRadialGradient(0, 0, BRONZE_RADIUS * 0.4, 0, 0, BRONZE_RADIUS + 5);
-    glow.addColorStop(0, 'rgba(253, 224, 71, 0.45)');
-    glow.addColorStop(0.7, 'rgba(234, 179, 8, 0.20)');
-    glow.addColorStop(1, 'rgba(234, 179, 8, 0)');
-    fCtx.fillStyle = glow;
+  // 3D side edge when rotated
+  if (wScale < 0.88) {
+    const edgeOffset = (1 - wScale) * 4.2;
+    fCtx.fillStyle = rimColor;
     fCtx.beginPath();
-    fCtx.arc(0, 0, BRONZE_RADIUS + 5, 0, Math.PI * 2);
+    fCtx.ellipse(edgeOffset * 0.5, 0, radius * wScale, radius, 0, 0, Math.PI * 2);
     fCtx.fill();
-
-    // 3D Coin edge when turned
-    if (wScale < 0.85) {
-      const edgeOffset = (1 - wScale) * 3.6;
-      fCtx.fillStyle = '#92400e';
-      fCtx.beginPath();
-      fCtx.ellipse(edgeOffset * 0.5, 0, BRONZE_RADIUS * wScale, BRONZE_RADIUS, 0, 0, Math.PI * 2);
-      fCtx.fill();
-    }
-
-    fCtx.scale(wScale, 1.0);
-
-    // Dark outline / shadow
-    fCtx.fillStyle = '#713f12';
-    fCtx.beginPath();
-    fCtx.arc(0, 0, BRONZE_RADIUS, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Radiant outer gold rim
-    const rimGrad = fCtx.createLinearGradient(-BRONZE_RADIUS, -BRONZE_RADIUS, BRONZE_RADIUS, BRONZE_RADIUS);
-    rimGrad.addColorStop(0, '#fffbeb');
-    rimGrad.addColorStop(0.2, '#fde047');
-    rimGrad.addColorStop(0.65, '#eab308');
-    rimGrad.addColorStop(1, '#9a3412');
-    fCtx.fillStyle = rimGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, BRONZE_RADIUS - 1.0, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Beaded inner border line
-    fCtx.strokeStyle = 'rgba(254, 240, 138, 0.65)';
-    fCtx.lineWidth = 1.0;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, BRONZE_RADIUS - 2.5, 0, Math.PI * 2);
-    fCtx.stroke();
-
-    // Glossy inset gold face
-    const innerGrad = fCtx.createRadialGradient(-BRONZE_RADIUS * 0.35, -BRONZE_RADIUS * 0.35, 2, 0, 0, BRONZE_RADIUS);
-    innerGrad.addColorStop(0, '#fff59d');
-    innerGrad.addColorStop(0.35, '#fbc02d');
-    innerGrad.addColorStop(0.75, '#f57f17');
-    innerGrad.addColorStop(1, '#d97706');
-    fCtx.fillStyle = innerGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, BRONZE_RADIUS - 3.2, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Big bold embossed "5" in center (NO "Rs", NO star!)
-    if (wScale >= 0.35) {
-      fCtx.font = '900 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      fCtx.textAlign = 'center';
-      fCtx.textBaseline = 'middle';
-      // 3D bottom drop-highlight
-      fCtx.strokeStyle = '#fffbeb';
-      fCtx.lineWidth = 2.4;
-      fCtx.lineJoin = 'round';
-      fCtx.strokeText('5', 0, 0.8);
-      // Dark 3D embossed text
-      fCtx.fillStyle = '#451a03';
-      fCtx.fillText('5', 0, 0.5);
-    }
-
-    // Moving shine highlight
-    const shineX = ((i / 7) * 2 - 1) * BRONZE_RADIUS * 0.88;
-    const shineGrad = fCtx.createLinearGradient(shineX - 4, -BRONZE_RADIUS, shineX + 4, BRONZE_RADIUS);
-    shineGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-    shineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
-    shineGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    fCtx.fillStyle = shineGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, BRONZE_RADIUS - 1.2, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Twinkling sparkle glint on coin rim
-    if (i % 2 === 0) {
-      fCtx.fillStyle = '#ffffff';
-      fCtx.beginPath();
-      fCtx.arc(-BRONZE_RADIUS * 0.55, -BRONZE_RADIUS * 0.55, 2.4, 0, Math.PI * 2);
-      fCtx.fill();
-    }
-
-    fCtx.restore();
-    bronzeFrames.push(canv);
   }
 
-  // 2. PLATINUM CHROME COIN: value 10, liquid silver with bright shine & bold "10"
-  const sSz = Math.ceil(SILVER_RADIUS * 2 + 16);
-  const scx = sSz / 2, scy = sSz / 2;
-  for (let i = 0; i < 8; i++) {
-    const canv = document.createElement('canvas');
-    canv.width = sSz;
-    canv.height = sSz;
-    const fCtx = canv.getContext('2d');
+  // 3D Spin Scale
+  fCtx.scale(wScale, 1.0);
 
-    const ang = (i / 8) * Math.PI;
-    const cosVal = Math.cos(ang);
-    const wScale = Math.max(0.18, Math.abs(cosVal));
-
-    fCtx.save();
-    fCtx.translate(scx, scy);
-
-    // Icy platinum glow aura
-    const sGlow = fCtx.createRadialGradient(0, 0, SILVER_RADIUS * 0.4, 0, 0, SILVER_RADIUS + 5);
-    sGlow.addColorStop(0, 'rgba(224, 242, 254, 0.5)');
-    sGlow.addColorStop(0.7, 'rgba(186, 230, 253, 0.2)');
-    sGlow.addColorStop(1, 'rgba(186, 230, 253, 0)');
-    fCtx.fillStyle = sGlow;
+  if (img && img.complete && img.naturalWidth > 0) {
+    // Draw the authentic 3D embossed custom coin image
+    fCtx.drawImage(img, -radius, -radius, radius * 2, radius * 2);
+  } else {
+    // High-contrast fallback if image still loading
+    fCtx.fillStyle = '#713f12';
     fCtx.beginPath();
-    fCtx.arc(0, 0, SILVER_RADIUS + 5, 0, Math.PI * 2);
+    fCtx.arc(0, 0, radius, 0, Math.PI * 2);
     fCtx.fill();
 
-    if (wScale < 0.85) {
-      const edgeOffset = (1 - wScale) * 3.8;
-      fCtx.fillStyle = '#334155';
-      fCtx.beginPath();
-      fCtx.ellipse(edgeOffset * 0.5, 0, SILVER_RADIUS * wScale, SILVER_RADIUS, 0, 0, Math.PI * 2);
-      fCtx.fill();
-    }
-
-    fCtx.scale(wScale, 1.0);
-
-    // Dark outline / shadow
-    fCtx.fillStyle = '#1e293b';
+    const rg = fCtx.createLinearGradient(-radius, -radius, radius, radius);
+    rg.addColorStop(0, '#fffbeb');
+    rg.addColorStop(0.3, '#fde047');
+    rg.addColorStop(0.7, '#eab308');
+    rg.addColorStop(1, '#9a3412');
+    fCtx.fillStyle = rg;
     fCtx.beginPath();
-    fCtx.arc(0, 0, SILVER_RADIUS, 0, Math.PI * 2);
+    fCtx.arc(0, 0, radius - 1, 0, Math.PI * 2);
     fCtx.fill();
 
-    // Outer lustrous silver rim
-    const rimGrad = fCtx.createLinearGradient(-SILVER_RADIUS, -SILVER_RADIUS, SILVER_RADIUS, SILVER_RADIUS);
-    rimGrad.addColorStop(0, '#ffffff');
-    rimGrad.addColorStop(0.25, '#f1f5f9');
-    rimGrad.addColorStop(0.7, '#cbd5e1');
-    rimGrad.addColorStop(1, '#475569');
-    fCtx.fillStyle = rimGrad;
+    const ig = fCtx.createRadialGradient(-radius * 0.35, -radius * 0.35, 2, 0, 0, radius);
+    ig.addColorStop(0, '#fff59d');
+    ig.addColorStop(0.4, '#ea580c');
+    ig.addColorStop(1, '#c2410c');
+    fCtx.fillStyle = ig;
     fCtx.beginPath();
-    fCtx.arc(0, 0, SILVER_RADIUS - 1.0, 0, Math.PI * 2);
+    fCtx.arc(0, 0, radius - 3, 0, Math.PI * 2);
     fCtx.fill();
 
-    // Inner silver inset face
-    const innerGrad = fCtx.createRadialGradient(-SILVER_RADIUS * 0.35, -SILVER_RADIUS * 0.35, 2, 0, 0, SILVER_RADIUS);
-    innerGrad.addColorStop(0, '#ffffff');
-    innerGrad.addColorStop(0.4, '#e2e8f0');
-    innerGrad.addColorStop(1, '#94a3b8');
-    fCtx.fillStyle = innerGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, SILVER_RADIUS - 3.2, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Big bold engraved "10" in center (NO "Rs"!)
     if (wScale >= 0.35) {
       fCtx.font = '900 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       fCtx.textAlign = 'center';
       fCtx.textBaseline = 'middle';
       fCtx.strokeStyle = '#ffffff';
       fCtx.lineWidth = 2.4;
-      fCtx.lineJoin = 'round';
-      fCtx.strokeText('10', 0, 0.8);
-      fCtx.fillStyle = '#0f172a';
-      fCtx.fillText('10', 0, 0.5);
+      fCtx.strokeText(fallbackNum, 0, 0.8);
+      fCtx.fillStyle = '#451a03';
+      fCtx.fillText(fallbackNum, 0, 0.5);
     }
-
-    // Moving shine highlight
-    const shineX = ((i / 7) * 2 - 1) * SILVER_RADIUS * 0.9;
-    const shineGrad = fCtx.createLinearGradient(shineX - 4, -SILVER_RADIUS, shineX + 4, SILVER_RADIUS);
-    shineGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-    shineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.80)');
-    shineGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    fCtx.fillStyle = shineGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, SILVER_RADIUS - 1.2, 0, Math.PI * 2);
-    fCtx.fill();
-
-    if (i % 2 === 0) {
-      fCtx.fillStyle = '#ffffff';
-      fCtx.beginPath();
-      fCtx.arc(-SILVER_RADIUS * 0.55, -SILVER_RADIUS * 0.55, 2.4, 0, Math.PI * 2);
-      fCtx.fill();
-    }
-
-    fCtx.restore();
-    silverFrames.push(canv);
   }
 
-  // 3. ROYAL GOLD COIN: value 10, imperial sun-gold with glowing aura & bold "10"
-  const gSz = Math.ceil(GOLD_RADIUS * 2 + 16);
-  const gcx = gSz / 2, gcy = gSz / 2;
-  for (let i = 0; i < 8; i++) {
-    const canv = document.createElement('canvas');
-    canv.width = gSz;
-    canv.height = gSz;
-    const fCtx = canv.getContext('2d');
+  // Moving shine highlight across face
+  const shineX = ((frameIdx / 7) * 2 - 1) * radius * 0.9;
+  const shineGrad = fCtx.createLinearGradient(shineX - 4.5, -radius, shineX + 4.5, radius);
+  shineGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  shineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.70)');
+  shineGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  fCtx.fillStyle = shineGrad;
+  fCtx.beginPath();
+  fCtx.arc(0, 0, radius - 1, 0, Math.PI * 2);
+  fCtx.fill();
 
+  // Twinkling sparkle glint
+  if (frameIdx % 2 === 0) {
+    fCtx.fillStyle = '#ffffff';
+    fCtx.beginPath();
+    fCtx.arc(-radius * 0.55, -radius * 0.55, 2.4, 0, Math.PI * 2);
+    fCtx.fill();
+  }
+
+  fCtx.restore();
+}
+
+function prerenderCoinFrames(img10, img50, img100) {
+  if (img10) coin10LoadedImg = img10;
+  if (img50) coin50LoadedImg = img50;
+  if (img100) coin100LoadedImg = img100;
+
+  bronzeFrames.length = 0;
+  silverFrames.length = 0;
+  goldFrames.length = 0;
+  gemFrames.length = 0;
+
+  const sz = 64;
+  const cx = 32, cy = 32;
+
+  for (let i = 0; i < 8; i++) {
     const ang = (i / 8) * Math.PI;
     const cosVal = Math.cos(ang);
     const wScale = Math.max(0.18, Math.abs(cosVal));
 
-    fCtx.save();
-    fCtx.translate(gcx, gcy);
+    // 1. 3D GOLD COIN 10
+    const canv10 = document.createElement('canvas');
+    canv10.width = sz; canv10.height = sz;
+    renderCustomCoinFrame(canv10.getContext('2d'), cx, cy, COIN_10_RADIUS, wScale, coin10LoadedImg, '10', ['rgba(253, 224, 71, 0.45)', 'rgba(234, 179, 8, 0.15)'], '#b45309', i);
+    bronzeFrames.push(canv10);
 
-    // Strong gold radial glow background
-    const glowGrad = fCtx.createRadialGradient(0, 0, GOLD_RADIUS * 0.4, 0, 0, GOLD_RADIUS + 6);
-    glowGrad.addColorStop(0, 'rgba(253, 224, 71, 0.60)');
-    glowGrad.addColorStop(0.65, 'rgba(234, 179, 8, 0.25)');
-    glowGrad.addColorStop(1, 'rgba(234, 179, 8, 0)');
-    fCtx.fillStyle = glowGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, GOLD_RADIUS + 6, 0, Math.PI * 2);
-    fCtx.fill();
+    // 2. 3D GOLD COIN 50
+    const canv50 = document.createElement('canvas');
+    canv50.width = sz; canv50.height = sz;
+    renderCustomCoinFrame(canv50.getContext('2d'), cx, cy, COIN_50_RADIUS, wScale, coin50LoadedImg, '50', ['rgba(250, 204, 21, 0.60)', 'rgba(234, 179, 8, 0.22)'], '#92400e', i);
+    silverFrames.push(canv50);
+    goldFrames.push(canv50);
 
-    if (wScale < 0.85) {
-      const edgeOffset = (1 - wScale) * 4.0;
-      fCtx.fillStyle = '#78350f';
-      fCtx.beginPath();
-      fCtx.ellipse(edgeOffset * 0.5, 0, GOLD_RADIUS * wScale, GOLD_RADIUS, 0, 0, Math.PI * 2);
-      fCtx.fill();
-    }
-
-    fCtx.scale(wScale, 1.0);
-
-    // Dark outline / shadow
-    fCtx.fillStyle = '#713f12';
-    fCtx.beginPath();
-    fCtx.arc(0, 0, GOLD_RADIUS, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Outer bright gold rim
-    const rimGrad = fCtx.createLinearGradient(-GOLD_RADIUS, -GOLD_RADIUS, GOLD_RADIUS, GOLD_RADIUS);
-    rimGrad.addColorStop(0, '#fef9c3');
-    rimGrad.addColorStop(0.25, '#fde047');
-    rimGrad.addColorStop(0.7, '#eab308');
-    rimGrad.addColorStop(1, '#a16207');
-    fCtx.fillStyle = rimGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, GOLD_RADIUS - 1.0, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Inner gold face
-    const innerGrad = fCtx.createRadialGradient(-GOLD_RADIUS * 0.35, -GOLD_RADIUS * 0.35, 2, 0, 0, GOLD_RADIUS);
-    innerGrad.addColorStop(0, '#fff59d');
-    innerGrad.addColorStop(0.4, '#eab308');
-    innerGrad.addColorStop(1, '#b45309');
-    fCtx.fillStyle = innerGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, GOLD_RADIUS - 3.4, 0, Math.PI * 2);
-    fCtx.fill();
-
-    // Big bold engraved "10" in center (NO "Rs"!)
-    if (wScale >= 0.35) {
-      fCtx.font = '900 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      fCtx.textAlign = 'center';
-      fCtx.textBaseline = 'middle';
-      fCtx.strokeStyle = '#fef08a';
-      fCtx.lineWidth = 2.4;
-      fCtx.lineJoin = 'round';
-      fCtx.strokeText('10', 0, 0.8);
-      fCtx.fillStyle = '#451a03';
-      fCtx.fillText('10', 0, 0.5);
-    }
-
-    // Moving shine highlight
-    const shineX = ((i / 7) * 2 - 1) * GOLD_RADIUS * 0.9;
-    const shineGrad = fCtx.createLinearGradient(shineX - 4.5, -GOLD_RADIUS, shineX + 4.5, GOLD_RADIUS);
-    shineGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-    shineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
-    shineGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    fCtx.fillStyle = shineGrad;
-    fCtx.beginPath();
-    fCtx.arc(0, 0, GOLD_RADIUS - 1.2, 0, Math.PI * 2);
-    fCtx.fill();
-
-    if (i % 2 === 0) {
-      fCtx.fillStyle = '#ffffff';
-      fCtx.beginPath();
-      fCtx.arc(-GOLD_RADIUS * 0.55, -GOLD_RADIUS * 0.55, 2.5, 0, Math.PI * 2);
-      fCtx.fill();
-    }
-
-    fCtx.restore();
-    goldFrames.push(canv);
-  }
-
-  // 4. ROYAL BLUE GEM COIN: value 50, faceted jewel coin with magical aura & bold "50"
-  const gemSz = Math.ceil(GEM_RADIUS * 2 + 16);
-  const gemCx = gemSz / 2, gemCy = gemSz / 2;
-  for (let i = 0; i < 8; i++) {
-    const canv = document.createElement('canvas');
-    canv.width = gemSz;
-    canv.height = gemSz;
-    const gCtx = canv.getContext('2d');
-
-    const ang = (i / 8) * Math.PI;
-    const wScale = Math.max(0.28, Math.abs(Math.cos(ang)));
-
-    gCtx.save();
-    gCtx.translate(gemCx, gemCy);
-
-    // Magical cyan aura
-    const mGlow = gCtx.createRadialGradient(0, 0, GEM_RADIUS * 0.4, 0, 0, GEM_RADIUS + 6);
-    mGlow.addColorStop(0, 'rgba(56, 189, 248, 0.60)');
-    mGlow.addColorStop(0.7, 'rgba(14, 165, 233, 0.20)');
-    mGlow.addColorStop(1, 'rgba(14, 165, 233, 0)');
-    gCtx.fillStyle = mGlow;
-    gCtx.beginPath();
-    gCtx.arc(0, 0, GEM_RADIUS + 6, 0, Math.PI * 2);
-    gCtx.fill();
-
-    gCtx.scale(wScale, 1.0);
-
-    const gr = GEM_RADIUS;
-
-    // Diamond gem outline / shadow
-    gCtx.fillStyle = '#082f49';
-    gCtx.beginPath();
-    gCtx.moveTo(0, -gr);
-    gCtx.lineTo(gr * 0.85, -gr * 0.35);
-    gCtx.lineTo(gr * 0.65, gr * 0.55);
-    gCtx.lineTo(0, gr);
-    gCtx.lineTo(-gr * 0.65, gr * 0.55);
-    gCtx.lineTo(-gr * 0.85, -gr * 0.35);
-    gCtx.closePath();
-    gCtx.fill();
-
-    // Blue gem body gradient
-    const gemGrad = gCtx.createLinearGradient(0, -gr, 0, gr);
-    gemGrad.addColorStop(0, '#f0f9ff');
-    gemGrad.addColorStop(0.2, '#38bdf8');
-    gemGrad.addColorStop(0.65, '#0284c7');
-    gemGrad.addColorStop(1, '#075985');
-    gCtx.fillStyle = gemGrad;
-    gCtx.beginPath();
-    gCtx.moveTo(0, -gr + 1.5);
-    gCtx.lineTo(gr * 0.85 - 1.2, -gr * 0.35);
-    gCtx.lineTo(gr * 0.65 - 1.2, gr * 0.55 - 1.0);
-    gCtx.lineTo(0, gr - 1.5);
-    gCtx.lineTo(-gr * 0.65 + 1.2, gr * 0.55 - 1.0);
-    gCtx.lineTo(-gr * 0.85 + 1.2, -gr * 0.35);
-    gCtx.closePath();
-    gCtx.fill();
-
-    // Internal facet lines
-    gCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-    gCtx.lineWidth = 1.0;
-    gCtx.beginPath();
-    gCtx.moveTo(0, -gr + 1.5);
-    gCtx.lineTo(0, gr - 1.5);
-    gCtx.moveTo(-gr * 0.85 + 1.2, -gr * 0.35);
-    gCtx.lineTo(gr * 0.85 - 1.2, -gr * 0.35);
-    gCtx.stroke();
-
-    // Big bold engraved "50" in center (NO "Rs"!)
-    if (wScale >= 0.35) {
-      gCtx.font = '900 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      gCtx.textAlign = 'center';
-      gCtx.textBaseline = 'middle';
-      gCtx.strokeStyle = '#082f49';
-      gCtx.lineWidth = 2.6;
-      gCtx.lineJoin = 'round';
-      gCtx.strokeText('50', 0, 0.8);
-      gCtx.fillStyle = '#ffffff';
-      gCtx.fillText('50', 0, 0.5);
-    }
-
-    // Sparkle glint on facet
-    if (i % 2 === 0) {
-      gCtx.fillStyle = '#ffffff';
-      gCtx.beginPath();
-      gCtx.arc(-gr * 0.3, -gr * 0.45, 2.8, 0, Math.PI * 2);
-      gCtx.fill();
-    }
-
-    gCtx.restore();
-    gemFrames.push(canv);
+    // 3. 3D ROYAL GOLD & WHITE LAUREL COIN 100
+    const canv100 = document.createElement('canvas');
+    canv100.width = sz; canv100.height = sz;
+    renderCustomCoinFrame(canv100.getContext('2d'), cx, cy, COIN_100_RADIUS, wScale, coin100LoadedImg, '100', ['rgba(255, 255, 255, 0.70)', 'rgba(250, 204, 21, 0.40)'], '#78350f', i);
+    gemFrames.push(canv100);
   }
 }
 
@@ -3004,8 +3406,8 @@ function playCoinPickupSound(coinType = 'bronze') {
     const pitchFactor = Math.pow(2, coinCombo / 14);
     const outNode = masterGain || audioCtx.destination;
 
-    if (coinType === 'gem') {
-      // Shimmering triple chime for rare blue gem
+    if (coinType === 'gem' || coinType === 'coin_100') {
+      // Shimmering triple chime for rare 100 laurel coin
       const freqs = [
         [1046.5 * pitchFactor, 1318.5 * pitchFactor],
         [1567.98 * pitchFactor, 2093.0 * pitchFactor],
@@ -3030,7 +3432,7 @@ function playCoinPickupSound(coinType = 'bronze') {
       return;
     }
 
-    if (coinType === 'gold') {
+    if (coinType === 'gold' || coinType === 'coin_50') {
       // Fuller double chime for gold coin
       const freqs = [
         [1046.5 * pitchFactor, 1318.5 * pitchFactor],
@@ -3317,7 +3719,7 @@ function generateLevelCoins(lvl, segsList) {
   // 3. FINISH ROAD: 10 straight coins along asphalt (9 bronze, final coin at finish line is silver)
   const finishCoinY = CAR_REST_Y - BRONZE_RADIUS - 2;
   const finishCoinsStart = FINISH_ROAD_X + 50;
-  const finishCoinsEnd = FINISH_LINE_X - 50;
+  const finishCoinsEnd = finishLineWorldX - 50;
   const finishCoinStep = (finishCoinsEnd - finishCoinsStart) / 9;
   for (let k = 0; k < 10; k++) {
     const isLast = (k === 9);
@@ -3920,11 +4322,22 @@ function getDifficultyDistance() {
 }
 
 // 1. Difficulty Growth:
-// Balanced progressive curve: fBase = 1 - exp(-(L - 1) / LEVEL_GROWTH_TAU)
-// Smoothly scales from Level 1 (f=0) through Level 10 (f~0.43) to Level 30 (f~0.84)
+// 1. Difficulty Growth & Stage Steps (Requirement 2):
+// - Balanced progressive curve: fBase grows across levels and never resets.
+// - At the start of a new stage it steps back by about 10% so the player can get used to the new look, then grows again.
 function getLevelDifficulty(lvl, p = 0) {
   const L = lvl || curLevel;
-  const fBase = 1 - Math.exp(-(L - 1) / LEVEL_GROWTH_TAU);
+  const stage = getStageNumber(L);
+  const levelInStage = getLevelInStage(L);
+
+  const rawF = 1 - Math.exp(-(L - 1) / LEVEL_GROWTH_TAU);
+
+  // 10% step-back at the start of a new stage (stage > 1), easing back across the stage
+  let stageDiscount = 0;
+  if (stage > 1) {
+    stageDiscount = 0.10 * (5 - levelInStage) / 4;
+  }
+  const fBase = rawF * (1 - stageDiscount);
 
   let intra = 1.0;
   if (p < INTRA_LEVEL_EASY_FRACTION) {
@@ -3963,31 +4376,36 @@ function showToast(msg) {
   playClickSound();
 }
 
-// 3. SPIKE SIZES:
-// - levels 1 & 2: only small spikes (12px), friendly introduction
-// - levels 3 to 4: medium (22px) and small spikes
-// - level 5+: big spikes (36px) appear moderately (8% to 24% at high levels)
+// 3. SPIKE SIZES (Requirement 1):
+// - Stage 1: only small spikes (12px)
+// - Stage 2: small and medium spikes (normal stepped corridors)
+// - Stage 3+: medium and big spikes appear gradually
 function pickClusterSize(lvl, levelRng) {
   const L = lvl || curLevel;
-  if (L < 5) {
-    if (L <= 2) return 'small';
-    return levelRng() < 0.45 ? 'medium' : 'small';
-  }
-  const t = Math.max(0, Math.min(1, (L - 5) / (25 - 5)));
+  const stage = getStageNumber(L);
+  if (stage === 1) return 'small';
+  if (stage === 2) return (levelRng() < 0.35) ? 'medium' : 'small';
+
+  const t = Math.max(0, Math.min(1, (L - 10) / (30 - 10)));
   const pBig = 0.08 + (0.24 - 0.08) * t;
-  const pMed = 0.42;
+  const pMed = 0.44;
   const r = levelRng();
   if (r < pBig) return 'big';
   if (r < pBig + pMed) return 'medium';
   return 'small';
 }
 
-// 4. SPIKE GENERATION: level 4+ mixes spike heights inside one rail
+// 4. SPIKE GENERATION (Requirement 1):
+// - Stage 1 & 2: no mixed spike heights on one rail
+// - Stage 3: mixed spike heights on one rail introduced in small amounts first (20%)
+// - Stage 4+: mixed spike heights kept (35%)
 function makeSpikes(len, lvl, top, bot, noSpikes = false, levelRng) {
   const count = Math.ceil(len / 12);
   const heights = { small: 12, medium: 22, big: 36 };
   const L = lvl || curLevel;
-  const allowMixed = (L >= 4);
+  const stage = getStageNumber(L);
+  const allowMixed = (stage >= 3);
+  const mixedProbability = (stage === 3) ? 0.20 : 0.35;
 
   function gen(isTop) {
     const list = [];
@@ -3995,7 +4413,7 @@ function makeSpikes(len, lvl, top, bot, noSpikes = false, levelRng) {
     while (i < count) {
       const cLen = Math.min(count - i, Math.floor(2 + levelRng() * 4));
       const baseSize = pickClusterSize(L, levelRng);
-      const isMixed = allowMixed && (levelRng() < 0.35);
+      const isMixed = allowMixed && (levelRng() < mixedProbability);
 
       for (let k = 0; k < cLen; k++) {
         let size = baseSize;
@@ -4055,65 +4473,109 @@ function addSeg(isOpen = false, forceLen) {
   // 2. Base Gap Height = lerp(4.4, 3.0, f) * carH (never below 3.0 * carH)
   let gap = isOpen ? 380 : getGapHeight(curLevel, p);
 
-  // 3. Squeeze sections (gap about 2.85 * carH) from level 7
+  // 3. Squeeze sections (Requirement 1):
+  // - Stages 1 to 4: none
+  // - Stage 5: short squeeze section (gap about 3.4 * carH or more) in small amounts first (1 section)
+  // - Stage 6: two squeeze sections in a row
+  // - Stage 7: squeeze sections kept
+  // - Stage 8+: all twists mixed
+  const stageNum = getStageNumber(curLevel);
   let isSqueeze = false;
-  if (!isOpen && curLevel >= 7) {
-    if (curLevel >= 15) {
-      if (segIndex === 4 || segIndex === 8) isSqueeze = true;
-    } else {
-      if (segIndex === 4) isSqueeze = true;
+  if (!isOpen && isTunnel) {
+    if (stageNum === 5) {
+      if (segIndex === 5) isSqueeze = true;
+    } else if (stageNum === 6) {
+      if (segIndex === 5 || segIndex === 6) isSqueeze = true;
+    } else if (stageNum === 7) {
+      if (segIndex === 6) isSqueeze = true;
+    } else if (stageNum >= 8) {
+      if (segIndex === 5 || segIndex === 6 || segIndex === 12) isSqueeze = true;
     }
   }
   if (isSqueeze) {
-    gap = SQUEEZE_GAP_RATIO * CAR_HITBOX_H;
-    len = Math.max(minSegLen, Math.round(len * 0.9));
+    gap = Math.max(3.4 * CAR_HITBOX_H, SQUEEZE_GAP_RATIO * CAR_HITBOX_H);
+    len = Math.max(minSegLen, Math.round(baseLen * 0.75));
   }
 
   // Seed twists for this level:
   if (!isOpen) {
-    if (levelSeedTwist === 'tight_corridor' && (segIndex === 2 || segIndex === 5)) {
+    if (levelSeedTwist === 'tight_corridor' && (segIndex === 2 || segIndex === 5) && !isSqueeze) {
       gap = Math.max(GAP_MAX_DIFFICULTY_RATIO * CAR_HITBOX_H, gap * 0.96);
     }
   }
 
-  // 4. Moving rails: from level 10, smooth gentle sine motion
+  // 4. Moving rails (Requirement 1):
+  // - Stages 1 to 3: none
+  // - Stage 4: slow small moving rails (amplitude at most 0.5 * carH), appears in small amounts first (1 section)
+  // - Stage 5 & 6: slow moving rails kept (1 section away from squeeze)
+  // - Stage 7: faster moving rails
+  // - Stage 8+: all twists mixed (both slow and fast moving rails)
   let moving = false;
   let moveAmp = 0;
   let moveSpeed = 0;
   let movePhase = 0;
 
-  if (!isOpen && curLevel >= 10) {
-    const isMovingSeg = (curLevel >= 18) ? (segIndex === 3 || segIndex === 7) : (segIndex === 4);
-    if (isMovingSeg) {
-      moving = true;
-      moveAmp = MOVE_RAIL_AMP_MIN + levelPRNG() * (MOVE_RAIL_AMP_MAX - MOVE_RAIL_AMP_MIN);
-      moveSpeed = (curLevel >= 16) ? MOVE_RAIL_SPEED_FAST : MOVE_RAIL_SPEED_SLOW;
-      movePhase = levelPRNG() * Math.PI * 2;
+  if (!isOpen && isTunnel && !isSqueeze) {
+    if (stageNum === 4) {
+      if (segIndex === 6) {
+        moving = true;
+        moveAmp = Math.min(0.5 * CAR_HITBOX_H, 10 + levelPRNG() * 6);
+        moveSpeed = MOVE_RAIL_SPEED_SLOW;
+        movePhase = levelPRNG() * Math.PI * 2;
+      }
+    } else if (stageNum === 5) {
+      if (segIndex === 9) {
+        moving = true;
+        moveAmp = Math.min(0.5 * CAR_HITBOX_H, 10 + levelPRNG() * 6);
+        moveSpeed = MOVE_RAIL_SPEED_SLOW;
+        movePhase = levelPRNG() * Math.PI * 2;
+      }
+    } else if (stageNum === 6) {
+      if (segIndex === 10) {
+        moving = true;
+        moveAmp = Math.min(0.5 * CAR_HITBOX_H, 10 + levelPRNG() * 7);
+        moveSpeed = MOVE_RAIL_SPEED_SLOW;
+        movePhase = levelPRNG() * Math.PI * 2;
+      }
+    } else if (stageNum === 7) {
+      if (segIndex === 3 || segIndex === 9) {
+        moving = true;
+        moveAmp = Math.min(0.5 * CAR_HITBOX_H, 10 + levelPRNG() * 7);
+        moveSpeed = (segIndex === 3) ? MOVE_RAIL_SPEED_FAST : MOVE_RAIL_SPEED_SLOW;
+        movePhase = levelPRNG() * Math.PI * 2;
+      }
+    } else if (stageNum >= 8) {
+      if (segIndex === 3 || segIndex === 9 || segIndex === 14) {
+        moving = true;
+        moveAmp = Math.min(0.5 * CAR_HITBOX_H, 10 + levelPRNG() * 8);
+        moveSpeed = (segIndex === 3 || segIndex === 14) ? MOVE_RAIL_SPEED_FAST : MOVE_RAIL_SPEED_SLOW;
+        movePhase = levelPRNG() * Math.PI * 2;
+      }
     }
   }
 
-  // 5. FAIR STEPS WITH REACTION TIME (Requirement 3):
-  // Up steps: 0.4 * MAX_UP_SPEED * segmentTime, down steps: 0.35 * terminalSinkSpeed * segmentTime.
-  // Window overlap >= 2.0 * carH: |cB - cA| <= (lastGap + gap)/2 - 2.0 * carH.
+  // 5. FAIR STEPS WITH REACTION TIME (Requirement 1 & 3):
+  // - Stage 1: gentle undulations (stepRatio small) so player learns controls
+  // - Stage 2+: normal stepped corridors with full dynamic range
+  const stepRatio = (stageNum === 1) ? 0.16 : lerp(STEP_MIN_RATIO, STEP_MAX_RATIO, f);
   const segTime = len / currentScrollSpeed;
   const maxUpStep = 0.4 * MAX_UP_SPEED * segTime;
   const maxDownStep = 0.35 * MAX_DOWN_SPEED * segTime;
   const fairStep = Math.min(0.5 * gap, Math.max(maxUpStep, maxDownStep));
-  const overlapStepLimit = Math.max(8, (lastGap + gap) / 2 - 2.0 * CAR_HITBOX_H);
-  const maxFairStep = Math.min(fairStep, overlapStepLimit);
+  const overlapStepLimit = Math.max(8, (lastGap + gap) / 2 - 2.0 * CAR_HITBOX_H - moveAmp);
+  const maxFairStep = Math.min(fairStep - moveAmp, overlapStepLimit);
 
-  const stepRatio = lerp(STEP_MIN_RATIO, STEP_MAX_RATIO, f);
-  let maxShift = isOpen ? 15 : (stepRatio * maxFairStep);
+  let maxShift = isOpen ? 15 : Math.max(4, stepRatio * maxFairStep);
 
   let shiftDir = (levelPRNG() * 2 - 1);
   if (!isOpen) {
-    if (levelSeedTwist === 'quick_stairs') {
-      shiftDir = (segIndex % 2 === 0) ? 0.9 : -0.9;
+    if (stageNum >= 2 && levelSeedTwist === 'quick_stairs') {
+      shiftDir = (segIndex % 2 === 0) ? 0.85 : -0.85;
     } else if (levelSeedTwist === 'smooth_corridor' && segIndex >= 1 && segIndex <= 3) {
       maxShift *= 0.25;
     }
     if (isSqueeze) {
-      maxShift *= 0.5;
+      maxShift *= 0.4;
     }
   }
 
@@ -4193,8 +4655,9 @@ function addSeg(isOpen = false, forceLen) {
   nextX += len;
 }
 
-// 4. SANITIZE LEVEL SEGMENTS (Requirement 4):
-// Check every neighboring pair with the rules and fix if needed, so a level never has an impossible spot.
+// 4. SANITIZE LEVEL SEGMENTS (Requirement 3):
+// Check every neighboring pair with the fairness rules and fix if needed, so a level never has an impossible spot.
+// Moving rails must collide exactly where they are drawn, and the fairness rules must hold at every moment of their motion.
 function sanitizeLevelSegments(segmentList) {
   const currentScrollSpeed = scrollSpeed();
   const carH = CAR_HITBOX_H;
@@ -4208,15 +4671,34 @@ function sanitizeLevelSegments(segmentList) {
     const gapB = curr.bot - curr.top;
     const lenB = curr.w;
 
+    const ampA = prev.moving ? (prev.moveAmp || 0) : 0;
+    const ampB = curr.moving ? (curr.moveAmp || 0) : 0;
+    const totalAmp = ampA + ampB;
+
     // 1. Step limit: up steps 0.4 * MAX_UP_SPEED * segTime, down steps 0.35 * MAX_DOWN_SPEED * segTime
     const segTime = lenB / currentScrollSpeed;
     const maxUpStep = 0.4 * MAX_UP_SPEED * segTime;
     const maxDownStep = 0.35 * MAX_DOWN_SPEED * segTime;
     const fairStep = Math.min(0.5 * gapB, Math.max(maxUpStep, maxDownStep));
 
-    // 2. Window overlap >= 2.0 * carH => |cB - cA| <= (gapA + gapB)/2 - 2.0 * carH
-    const overlapStepLimit = Math.max(8, (gapA + gapB) / 2 - 2.0 * carH);
-    const maxAllowedStep = Math.min(fairStep, overlapStepLimit);
+    // 2. Window overlap >= 2.0 * carH at ALL moments of motion:
+    // overlap(t) = (gapA + gapB)/2 - |cB(t) - cA(t)| >= 2.0 * carH
+    // Since worst-case center distance is |cB - cA| + totalAmp:
+    // |cB - cA| <= (gapA + gapB)/2 - 2.0 * carH - totalAmp
+    let overlapStepLimit = (gapA + gapB) / 2 - 2.0 * carH - totalAmp;
+    let motionFairStep = fairStep - totalAmp;
+
+    // If totalAmp is too large to allow safe passage, clamp moving amplitudes
+    if (motionFairStep < 6 || overlapStepLimit < 6) {
+      if (curr.moving) {
+        curr.moveAmp = Math.max(6, Math.min(curr.moveAmp, 0.5 * carH, (fairStep - 12) / 2));
+      }
+      if (prev.moving) {
+        prev.moveAmp = Math.max(6, Math.min(prev.moveAmp, 0.5 * carH, (fairStep - 12) / 2));
+      }
+    }
+    const safeTotalAmp = (prev.moving ? (prev.moveAmp || 0) : 0) + (curr.moving ? (curr.moveAmp || 0) : 0);
+    const maxAllowedStep = Math.max(6, Math.min(fairStep - safeTotalAmp, (gapA + gapB) / 2 - 2.0 * carH - safeTotalAmp));
 
     const cA = (prev.top + prev.bot) / 2;
     let cB = (curr.top + curr.bot) / 2;
@@ -4226,18 +4708,25 @@ function sanitizeLevelSegments(segmentList) {
       cB = cA + Math.sign(diff) * maxAllowedStep;
     }
 
-    // Band clamp
-    const bandMinC = Math.max(TUNNEL_CENTER_MIN * H, gapB / 2 + 0.12 * H);
-    const bandMaxC = Math.min(TUNNEL_CENTER_MAX * H, H * 0.80 - gapB / 2);
+    // 3. Screen vertical band constraints (accounting for motion amplitude)
+    const curAmpB = curr.moving ? (curr.moveAmp || 0) : 0;
+    const curAmpA = prev.moving ? (prev.moveAmp || 0) : 0;
+    const bandMinC = Math.max(TUNNEL_CENTER_MIN * H, gapB / 2 + curAmpB + 0.12 * H);
+    const bandMaxC = Math.min(TUNNEL_CENTER_MAX * H, H * 0.80 - gapB / 2 - curAmpB);
     const safeMinC = Math.min(bandMinC, bandMaxC);
     const safeMaxC = Math.max(bandMinC, bandMaxC);
     cB = Math.max(safeMinC, Math.min(safeMaxC, cB));
 
-    // Ensure overlap >= 2.0 * carH
-    const curOverlap = Math.min(prev.bot, cB + gapB / 2) - Math.max(prev.top, cB - gapB / 2);
-    if (curOverlap < 2.0 * carH) {
-      cB = (cB > cA) ? (prev.bot + gapB / 2 - 2.0 * carH) : (prev.top - gapB / 2 + 2.0 * carH);
-      cB = Math.max(safeMinC, Math.min(safeMaxC, cB));
+    // 4. Double check window overlap >= 2.0 * carH at maximum displacement
+    const minOverlap = Math.min(prev.bot - curAmpA, cB + gapB / 2 - curAmpB) -
+                       Math.max(prev.top + curAmpA, cB - gapB / 2 + curAmpB);
+    if (minOverlap < 2.0 * carH) {
+      const neededShift = (2.0 * carH - minOverlap);
+      if (cB > cA) {
+        cB = Math.max(safeMinC, cB - neededShift);
+      } else {
+        cB = Math.min(safeMaxC, cB + neededShift);
+      }
     }
 
     curr.top = cB - gapB / 2;
@@ -4245,9 +4734,9 @@ function sanitizeLevelSegments(segmentList) {
     curr.curTop = curr.top;
     curr.curBot = curr.bot;
 
-    // Spikes clearance check
+    // 5. Spikes clearance check (ensuring at least carH + 18 clearance between opposing spike tips)
     if (curr.topSpikes && curr.botSpikes) {
-      const maxSpikeSum = Math.max(0, (curr.bot - curr.top) - (carH + 20));
+      const maxSpikeSum = Math.max(0, (curr.bot - curr.top) - (carH + 18));
       for (let k = 0; k < curr.topSpikes.length; k++) {
         if (curr.topSpikes[k].h + curr.botSpikes[k].h > maxSpikeSum) {
           const excess = (curr.topSpikes[k].h + curr.botSpikes[k].h) - maxSpikeSum;
@@ -4298,6 +4787,19 @@ function startLevel(lvl) {
   confettiStarted = false;
   levelCompleted = false;
   carDrawX = CAR_X;
+  finishRunStage = 'none';
+  finishRunTimer = 0;
+  landingScrollSpeed = 0;
+  scrollStopTimer = 0;
+  camEaseStart = 0;
+  camEaseDist = 0;
+  carDriveTimer = 0;
+  thumbsUpTimer = 0;
+  confettiStarted = false;
+  levelCompleted = false;
+  safetyLandingTimer = 0;
+  safetyLandingStartY = CAR_REST_Y;
+  hasTouchedDown = false;
   levelCompleteTimer = 0;
   levelJustCleared = 0;
   confettis = [];
@@ -4310,8 +4812,8 @@ function startLevel(lvl) {
   TUNNEL_END_X = TUNNEL_START_X + TUNNEL_LENGTH;
   FINISH_ROAD_X = TUNNEL_END_X + CALM_OPEN_GAP;
   FINISH_ROAD_END = FINISH_ROAD_X + FINISH_ROAD_LENGTH;
-  FINISH_LINE_X = FINISH_ROAD_X + FINISH_ROAD_LENGTH * FINISH_LINE_AT;
-  LEVEL_LENGTH = FINISH_LINE_X - CAR_X;
+  finishLineWorldX = FINISH_ROAD_X + FINISH_ROAD_LENGTH * FINISH_LINE_AT;
+  LEVEL_LENGTH = FINISH_ROAD_X - CAR_X;
   playLaunchSpinSound();
 
   const cfg = getLevelConfig(lvl);
@@ -4665,19 +5167,16 @@ function drawRoadPlatform(startX, endX, roadTop, isFinish = false) {
   const roadBottom = roadTop + bandH; // roadTop + 36
   const trussBottom = roadBottom + 20;
 
+  // Clip all details of a road strictly to the road's own rectangle [x, x + w]
   ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, roadTop - 32, w, (trussBottom + 8) - (roadTop - 32));
+  ctx.clip();
+
   // Soft drop shadow under platform
   ctx.shadowColor = 'rgba(15, 23, 42, 0.45)';
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 4;
-
-  ctx.beginPath();
-  ctx.moveTo(x - 20, roadTop - 4);
-  ctx.lineTo(x + w, roadTop - 4);
-  ctx.lineTo(x + w - 12, trussBottom + 2);
-  ctx.lineTo(x - 20, trussBottom + 2);
-  ctx.closePath();
-  ctx.clip();
 
   // 1. Asphalt Road Surface (frames car in the middle of the road, 36px tall band)
   ctx.fillStyle = '#26282c';
@@ -4689,15 +5188,16 @@ function drawRoadPlatform(startX, endX, roadTop, isFinish = false) {
   ctx.fillStyle = '#f87171';
   ctx.fillRect(x, roadTop - 2, w, 1);
 
-  // 3. Yellow Dashed Center Lane Markings (runs right through middle of road at wheel-hub height)
+  // 3. Yellow Dashed Center Lane Markings
+  // Start at least 20 px after road's left edge and stop at least 20 px before right edge; only whole dashes
   ctx.fillStyle = '#fde047';
-  const startDash = Math.floor(startX / 48) * 48;
-  for (let wx = startDash; wx < endX + 48; wx += 48) {
-    const dx = wx - cam;
-    ctx.fillRect(dx, roadCenterY - 1.5, 22, 3);
+  const dashW = 22;
+  const dashPitch = 48;
+  for (let relX = 24; relX + dashW <= w - 20; relX += dashPitch) {
+    ctx.fillRect(x + relX, roadCenterY - 1.5, dashW, 3);
   }
 
-  // 4. Lower Red Deck Edge (front edge of the road, below tires at roadBottom - 2 = roadTop + 34)
+  // 4. Lower Red Deck Edge (front edge of the road, below tires at roadBottom - 2)
   ctx.fillStyle = '#dc2626';
   ctx.fillRect(x, roadBottom - 2, w, 4);
   ctx.fillStyle = '#f87171';
@@ -4710,26 +5210,65 @@ function drawRoadPlatform(startX, endX, roadTop, isFinish = false) {
   ctx.strokeStyle = '#475569';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  const startTruss = Math.floor(startX / 40) * 40;
-  for (let wx = startTruss; wx < endX + 40; wx += 40) {
-    const p1 = wx - cam, p2 = wx + 40 - cam;
+  for (let relX = 0; relX < w; relX += 40) {
+    const p1 = x + relX;
+    const p2 = Math.min(x + w, x + relX + 40);
     ctx.moveTo(p1, roadBottom + 3); ctx.lineTo(p2, roadBottom + 19);
     ctx.moveTo(p2, roadBottom + 3); ctx.lineTo(p1, roadBottom + 19);
   }
   ctx.stroke();
 
+  // 6. Safety rail at the end of the road (strictly clipped inside the road's rectangle)
+  if (isFinish) {
+    const railScreenX = endX - cam;
+    if (railScreenX > -40 && railScreenX < W + 40) {
+      const rx = railScreenX - 12;
+      // Heavy steel posts
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(rx - 3, roadTop - 26, 6, bandH + 26);
+      ctx.fillRect(rx + 4, roadTop - 26, 6, bandH + 26);
+
+      // Crash barrier body
+      const barrierW = 16;
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(rx - 4, roadTop - 22, barrierW, 14);
+
+      // Red and white hazard warning stripes
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rx - 4, roadTop - 22, barrierW, 14);
+      ctx.clip();
+      for (let sx = -12; sx < barrierW + 12; sx += 6) {
+        ctx.fillStyle = (Math.floor(sx / 6) % 2 === 0) ? '#ef4444' : '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(rx - 4 + sx, roadTop - 8);
+        ctx.lineTo(rx - 4 + sx + 6, roadTop - 8);
+        ctx.lineTo(rx - 4 + sx + 12, roadTop - 22);
+        ctx.lineTo(rx - 4 + sx + 6, roadTop - 22);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Red reflector caps
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(rx - 4, roadTop - 28, 7, 3);
+      ctx.fillRect(rx + 3, roadTop - 28, 7, 3);
+    }
+  }
+
   ctx.restore();
 
   if (isFinish) {
     ctx.save();
-    const cfg = curConfig;
-    const finishLineWx = FINISH_LINE_X;
-    const characterWx = FINISH_LINE_X + 50;
+    const camStop = FINISH_ROAD_END - ROAD_END_STOP_X;
+    const finishLineWx = camStop + FINISH_LINE_X;
+    const characterWx = camStop + CHARACTER_X;
     const flX = finishLineWx - cam;
     const charX = characterWx - cam;
 
     // 1. Checkered Finish Line Strip across the asphalt road
-    if (flX > -40 && flX < W + 40) {
+    if (flX >= x - 20 && flX <= x + w + 20) {
       const stripW = 16;
       const cols = 2;
       const rows = 4;
@@ -4788,44 +5327,7 @@ function drawRoadPlatform(startX, endX, roadTop, isFinish = false) {
       }
     }
 
-    // 3. Safety rail at the end of the road
-    const railScreenX = endX - cam;
-    if (railScreenX > -40 && railScreenX < W + 40) {
-      const rx = railScreenX - 8;
-      // Heavy steel posts
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(rx - 3, roadTop - 26, 6, bandH + 26);
-      ctx.fillRect(rx + 4, roadTop - 26, 6, bandH + 26);
-
-      // Crash barrier body
-      const barrierW = 16;
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(rx - 4, roadTop - 22, barrierW, 14);
-
-      // Red and white hazard warning stripes
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(rx - 4, roadTop - 22, barrierW, 14);
-      ctx.clip();
-      for (let sx = -12; sx < barrierW + 12; sx += 6) {
-        ctx.fillStyle = (Math.floor(sx / 6) % 2 === 0) ? '#ef4444' : '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(rx - 4 + sx, roadTop - 8);
-        ctx.lineTo(rx - 4 + sx + 6, roadTop - 8);
-        ctx.lineTo(rx - 4 + sx + 12, roadTop - 22);
-        ctx.lineTo(rx - 4 + sx + 6, roadTop - 22);
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.restore();
-
-      // Red reflector caps
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(rx - 4, roadTop - 28, 7, 3);
-      ctx.fillRect(rx + 3, roadTop - 28, 7, 3);
-    }
-
-    // 4. Cheering friendly character standing on the road at characterWx
+    // 3. Cheering friendly character standing on the road at characterWx
     drawFinishCharacter(charX, roadTop);
 
     ctx.restore();
@@ -4927,20 +5429,27 @@ function drawVerticalRailConnector(x, y1, y2, cfg) {
   ctx.restore();
 }
 
-function drawSpike(x, baseY, isTop, sp) {
+function drawSpike(x, baseY, isTop, sp, idx = 0) {
   if (!sp || !sp.h || sp.h <= 0) return;
-  const key = `${sp.size}_${isTop ? 'top' : 'bot'}`;
-  const spr = spikeCanvases[key];
+  const stageIdx = (getStageNumber(curLevel) - 1) % STAGES.length;
+  const stageCanvases = (stageSpikeCanvases && stageSpikeCanvases[stageIdx]) ? stageSpikeCanvases[stageIdx] : spikeCanvases;
+  if (!stageCanvases) return;
+
+  const hasVariants = (stageIdx === 4 || stageIdx === 5);
+  const variant = hasVariants ? (idx % 2) : 0;
+  const key = hasVariants ? `${sp.size}_${isTop ? 'top' : 'bot'}_${variant}` : `${sp.size}_${isTop ? 'top' : 'bot'}`;
+  const spr = stageCanvases[key] || stageCanvases[`${sp.size}_${isTop ? 'top' : 'bot'}`] || spikeCanvases[key];
+
   if (spr) {
     ctx.save();
-    // Soft shadow behind spike so it pops from bright sky picture
+    // Soft shadow behind spike so it pops from background
     ctx.shadowColor = 'rgba(15, 23, 42, 0.35)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetY = isTop ? 2 : -2;
     if (isTop) {
-      ctx.drawImage(spr, x + 6 - 18, baseY - 2);
+      ctx.drawImage(spr, x + 6 - 20, baseY - 4);
     } else {
-      ctx.drawImage(spr, x + 6 - 18, baseY - 46);
+      ctx.drawImage(spr, x + 6 - 20, baseY - 48);
     }
     ctx.restore();
   }
@@ -5199,7 +5708,8 @@ function car(drawX = CAR_X) {
   }
 
   if (trimmedCarCanvas) {
-    ctx.shadowColor = 'transparent';
+    ctx.shadowColor = CAR_GLOW_COLOR;
+    ctx.shadowBlur = CAR_GLOW_BLUR;
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
@@ -5340,18 +5850,14 @@ function drawStageScene(stageNum, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  if (stage.backgroundPicture && stage.backgroundPicture.length > 0) {
-    const pic = getLevelPicture(curLevel);
-    if (pic && pic.seamlessCanvas) {
-      const unitW = pic.unitW;
-      const scrollX = cam * 0.15;
-      const relX = -((scrollX % unitW + unitW) % unitW);
-      ctx.drawImage(pic.seamlessCanvas, relX, 0);
-      if (relX + unitW < W) ctx.drawImage(pic.seamlessCanvas, relX + unitW, 0);
-      if (relX > 0) ctx.drawImage(pic.seamlessCanvas, relX - unitW, 0);
-    } else if (bgData) {
-      drawPreRenderedStage(bgData);
-    }
+  const pic = (stage.backgroundPicture && stage.backgroundPicture.length > 0) ? getLevelPicture(curLevel) : getLevelPicture(curLevel);
+  if (pic && pic.seamlessCanvas) {
+    const unitW = pic.unitW;
+    const scrollX = cam * 0.15;
+    const relX = -((scrollX % unitW + unitW) % unitW);
+    ctx.drawImage(pic.seamlessCanvas, relX, 0);
+    if (relX + unitW < W) ctx.drawImage(pic.seamlessCanvas, relX + unitW, 0);
+    if (relX > 0) ctx.drawImage(pic.seamlessCanvas, relX - unitW, 0);
   } else if (bgData) {
     drawPreRenderedStage(bgData);
   } else {
@@ -5559,41 +6065,33 @@ function step(dt) {
           type: c.type
         });
 
-        // Floating real value text (clean numbers: +5, +10, +50):
-        if (c.type === 'bronze' || !c.type || c.type === 'coin') {
+        // Floating real value text (clean numbers: +10, +50, +100):
+        if (c.type === 'coin_10' || c.type === 'bronze' || !c.type || c.type === 'coin') {
           bronzeCoinsPicked++;
           if (bronzeCoinsPicked % 3 === 0) {
             coinFloatTexts.push({
-              text: '+5',
+              text: '+10',
               x: carDrawX,
               y: cy - 24,
               timer: 0.65,
               color: '#fde047'
             });
           }
-        } else if (c.type === 'silver') {
-          coinFloatTexts.push({
-            text: '+10',
-            x: carDrawX,
-            y: cy - 24,
-            timer: 0.65,
-            color: '#e2e8f0'
-          });
-        } else if (c.type === 'gold') {
-          coinFloatTexts.push({
-            text: '+10',
-            x: carDrawX,
-            y: cy - 24,
-            timer: 0.65,
-            color: '#fde047'
-          });
-        } else if (c.type === 'gem') {
+        } else if (c.type === 'coin_50' || c.type === 'gold' || c.type === 'silver') {
           coinFloatTexts.push({
             text: '+50',
             x: carDrawX,
             y: cy - 24,
             timer: 0.65,
-            color: '#38bdf8'
+            color: '#fde047'
+          });
+        } else if (c.type === 'coin_100' || c.type === 'gem') {
+          coinFloatTexts.push({
+            text: '+100',
+            x: carDrawX,
+            y: cy - 24,
+            timer: 0.65,
+            color: '#ffffff'
           });
         }
       }
@@ -5627,28 +6125,10 @@ function step(dt) {
     const wx = cam + CAR_X;
     const progress = getLevelProgress();
 
-    // Auto Landing: autopilot takes over smoothly as soon as last spike has passed
-    if (wx >= TUNNEL_END_X && !autoLanding) {
-      autoLanding = true;
-      landingStartY = cy;
-    }
-    if (autoLanding || stopping) {
-      hold = false;
-      thrust = 0;
-    }
-    if (autoLanding) {
-      if (wx < FINISH_ROAD_X) {
-        // Ease smoothly in and out toward CAR_REST_Y over CALM_OPEN_GAP (300px)
-        const landT = Math.max(0, Math.min(1.0, (wx - TUNNEL_END_X) / CALM_OPEN_GAP));
-        const easeT = landT * landT * (3 - 2 * landT);
-        cy = landingStartY + (CAR_REST_Y - landingStartY) * easeT;
-        vy = 0;
-      } else {
-        // Tires touch asphalt exactly when car is above finish road
-        cy = CAR_REST_Y;
-        vy = 0;
-      }
-    } else if (!stopping) {
+    // 1. Player-controlled flight & landing (NO autopilot):
+    // After the last spike, player keeps full control (thrust and sink work with normal physics).
+    // Open area between last spike and finish road has no spikes and no crashes.
+    if (finishRunStage === 'none') {
       if (hold) {
         thrust = Math.min(1, thrust + dt / THRUST_RISE_TIME);
       } else {
@@ -5659,9 +6139,11 @@ function step(dt) {
       vy *= Math.exp(-AIR_DRAG * dt);
       vy = Math.max(-MAX_UP_SPEED, Math.min(MAX_DOWN_SPEED, vy));
       cy += vy * dt;
+
       const onStartPlatform = (wx >= START_ROAD_START && wx <= START_ROAD_END);
       const onFinishPlatform = (wx >= FINISH_ROAD_X && wx <= FINISH_ROAD_END);
       const onRoadPlatform = onStartPlatform || onFinishPlatform;
+
       if (onRoadPlatform) {
         if (!hold && cy >= CAR_REST_Y) {
           cy = CAR_REST_Y;
@@ -5672,77 +6154,159 @@ function step(dt) {
           if (vy > 0) vy = 0;
         }
       }
+
+      // Safety fallback: if finish road has passed under car front and car is still in air,
+      // ease car down gently to the road in about 0.6 seconds.
+      if (wx >= FINISH_ROAD_X && cy < CAR_REST_Y) {
+        if (safetyLandingTimer === 0) {
+          safetyLandingStartY = cy;
+        }
+        safetyLandingTimer += dt;
+        const safeT = Math.min(1.0, safetyLandingTimer / 0.6);
+        const easeSafe = safeT * safeT * (3 - 2 * safeT);
+        cy = safetyLandingStartY + (CAR_REST_Y - safetyLandingStartY) * easeSafe;
+        if (safeT >= 1.0) {
+          cy = CAR_REST_Y;
+          vy = 0;
+        }
+      } else if (wx < FINISH_ROAD_X) {
+        safetyLandingTimer = 0;
+      }
+
       if (cy < 16) { cy = 16; vy = 0; }
       if (cy > H - 16) { cy = H - 16; vy = 0; }
-    }
 
-    // Finish Line: when finish line reaches car's x position on asphalt, level is complete
-    // Confetti starts, score shows 100, scroll speed eases down to 0 in STOP_TIME (1.2s)
-    // One second after car stopped (STOP_TIME + 1.0s = 2.2s), show "Level N Clear!" popup
-    if (wx >= FINISH_LINE_X && !stopping && cy >= CAR_REST_Y - 2) {
-      stopping = true;
-      stopTimer = 0;
-      playWinSound();
-      initConfetti();
-    }
-
-    let ease = 1;
-    if (stopping) {
-      stopTimer += dt;
-      if (stopTimer <= STOP_TIME) {
-        ease = Math.max(0, 1 - stopTimer / STOP_TIME);
-      } else {
-        ease = 0;
+      // Landing moment: as soon as car lands on finish road (tires touch asphalt), start finish run!
+      if (wx >= FINISH_ROAD_X && cy >= CAR_REST_Y - 2) {
+        finishRunStage = 'speed_run';
+        finishRunTimer = 0;
+        landingScrollSpeed = sp;
+        cy = CAR_REST_Y;
+        vy = 0;
+        hold = false;
+        thrust = 0;
+        playWinSound();
       }
-      cy = CAR_REST_Y;
-      vy = 0;
+    }
+
+    // 2. FINISH RUN EXECUTION:
+    const camStop = FINISH_ROAD_END - ROAD_END_STOP_X;
+    const easeDist = FINISH_RUN_SPEED * 0.5 * 0.5; // distance during 0.5s deceleration = 0.30 * W
+    const wheelRadiusPx = CAR_DRAW_W * WHEEL_RADIUS;
+
+    if (finishRunStage !== 'none') {
       hold = false;
       thrust = 0;
-      if (stopTimer >= STOP_TIME + 1.0) {
-        st = 'level_complete';
-        stopping = false;
-        autoLanding = false;
-        hold = false;
-        vy = 0;
-        cy = CAR_REST_Y;
-        levelCompleteTimer = 0;
-        levelJustCleared = curLevel;
+      cy = CAR_REST_Y;
+      vy = 0;
 
-        const ratio = levelCoinsTotal > 0 ? (levelCoinsCollected / levelCoinsTotal) : 1;
-        earnedStars = 1;
-        if (ratio >= 0.60) earnedStars = 2;
-        if (ratio >= 0.90) earnedStars = 3;
-        isPerfect = (levelCoinsTotal > 0 && levelCoinsCollected >= levelCoinsTotal);
-        perfectBonusGiven = false;
-        starSoundsPlayed = [false, false, false];
+      if (finishRunStage === 'speed_run') {
+        finishRunTimer += dt;
+        const accelT = Math.min(1.0, finishRunTimer / 0.5);
+        const currentScrollSp = lerp(landingScrollSpeed, FINISH_RUN_SPEED, accelT);
+        cam += currentScrollSp * dt;
+        carDrawX = CAR_X;
 
-        saveStars(curLevel, earnedStars);
+        // Wheels spin at fastest speed
+        if (wheelRadiusPx > 0) {
+          const maxSpin = (FINISH_RUN_SPEED / wheelRadiusPx) * 2.5;
+          wheelAngle += maxSpin * dt;
+          wheelRot = wheelAngle;
+        }
 
-        const nextLvl = curLevel + 1;
-        const clearScore = 100 * curLevel;
-        if (clearScore > best) best = clearScore;
-        saveProgress(curLevel, Math.max(highestLevel, nextLvl), best);
+        // Subtle white dust at tires
+        if (Math.random() < 0.45) {
+          spawnTireDust();
+        }
+
+        if (cam >= camStop - easeDist) {
+          finishRunStage = 'scroll_stopping';
+          scrollStopTimer = 0;
+          camEaseStart = cam;
+          camEaseDist = camStop - cam;
+        }
+      } else if (finishRunStage === 'scroll_stopping') {
+        scrollStopTimer += dt;
+        const t = Math.min(1.0, scrollStopTimer / 0.5);
+        const progressEase = 1 - Math.pow(1 - t, 2);
+        cam = camEaseStart + camEaseDist * progressEase;
+        carDrawX = CAR_X;
+
+        const currentScrollSp = FINISH_RUN_SPEED * (1 - t);
+        if (wheelRadiusPx > 0) {
+          const spinRate = (currentScrollSp / wheelRadiusPx) * 2.5;
+          wheelAngle += spinRate * dt;
+          wheelRot = wheelAngle;
+        }
+
+        if (Math.random() < 0.35 * (1 - t)) {
+          spawnTireDust();
+        }
+
+        if (t >= 1.0) {
+          cam = camStop;
+          finishRunStage = 'car_driving';
+          carDriveTimer = 0;
+        }
+      } else if (finishRunStage === 'car_driving') {
+        carDriveTimer += dt;
+        const driveDuration = 1.35;
+        const t = Math.min(1.0, carDriveTimer / driveDuration);
+        const carTargetCenterX = CAR_STOP_FRONT_X - CAR_DRAW_W * 0.42;
+        const totalDist = carTargetCenterX - CAR_X;
+        const driveEase = 1 - Math.pow(1 - t, 2.8);
+        carDrawX = CAR_X + totalDist * driveEase;
+
+        if (wheelRadiusPx > 0 && t < 1.0) {
+          const forwardVelocity = (totalDist * 2.8 * Math.pow(1 - t, 1.8)) / driveDuration;
+          const spinRate = Math.max(0, forwardVelocity / wheelRadiusPx);
+          wheelAngle += spinRate * dt;
+          wheelRot = wheelAngle;
+        }
+
+        const carFrontScreenX = carDrawX + CAR_DRAW_W * 0.42;
+        if (carFrontScreenX >= FINISH_LINE_X && !confettiStarted) {
+          confettiStarted = true;
+          initConfetti();
+        }
+
+        if (t >= 1.0) {
+          finishRunStage = 'car_stopped';
+          thumbsUpTimer = 0;
+        }
+      } else if (finishRunStage === 'car_stopped') {
+        thumbsUpTimer += dt;
+        carDrawX = CAR_STOP_FRONT_X - CAR_DRAW_W * 0.42;
+
+        if (thumbsUpTimer >= 1.0 && !levelCompleted) {
+          levelCompleted = true;
+          st = 'level_complete';
+          levelCompleteTimer = 0;
+          levelJustCleared = curLevel;
+          const ratio = levelCoinsTotal > 0 ? (levelCoinsCollected / levelCoinsTotal) : 1;
+          earnedStars = 1;
+          if (ratio >= 0.60) earnedStars = 2;
+          if (ratio >= 0.90) earnedStars = 3;
+          isPerfect = (levelCoinsTotal > 0 && levelCoinsCollected >= levelCoinsTotal);
+          perfectBonusGiven = false;
+          starSoundsPlayed = [false, false, false];
+          saveStars(curLevel, earnedStars);
+          const nextLvl = curLevel + 1;
+          const clearScore = 100 * curLevel;
+          if (clearScore > best) best = clearScore;
+          saveProgress(curLevel, Math.max(highestLevel, nextLvl), best);
+        }
+      }
+    } else {
+      cam += sp * dt;
+      carDrawX = CAR_X;
+      if (wheelRadiusPx > 0) {
+        currentAngularSpeed = (sp / wheelRadiusPx) * (hold ? 2.2 : 1.0);
+        wheelAngle += currentAngularSpeed * dt;
+        wheelRot = wheelAngle;
       }
     }
 
-    const curScrollSpeed = sp * ease;
-    cam += curScrollSpeed * dt;
-    carDrawX = CAR_X;
-
-    const wheelRadiusPx = CAR_DRAW_W * WHEEL_RADIUS;
-    if (wheelRadiusPx > 0 && curScrollSpeed > 0) {
-      const targetSpinMult = (hold && !autoLanding && !stopping) ? 2.2 : 1.0;
-      if (thrustSpinMultiplier < targetSpinMult) {
-        thrustSpinMultiplier = Math.min(targetSpinMult, thrustSpinMultiplier + (1.2 / 0.08) * dt);
-      } else if (thrustSpinMultiplier > targetSpinMult) {
-        thrustSpinMultiplier = Math.max(targetSpinMult, thrustSpinMultiplier - (1.2 / 0.30) * dt);
-      }
-      currentAngularSpeed = (curScrollSpeed / wheelRadiusPx) * thrustSpinMultiplier;
-      wheelAngle += currentAngularSpeed * dt;
-      wheelRot = wheelAngle;
-    }
-
-    // Flying sound & thruster smoke
     const onStartPlatform = (wx >= START_ROAD_START && wx <= START_ROAD_END);
     const onFinishPlatform = (wx >= FINISH_ROAD_X && wx <= FINISH_ROAD_END);
     const onRoadPlatform = onStartPlatform || onFinishPlatform;
@@ -6049,12 +6613,8 @@ function drawHUD() {
     saveProgress(curLevel, highestLevel, best);
   }
 
-  // 1. Score in score-pill style at top right with gold star badge
-  const scoreX = W - 98, scoreY = 12 + topInset, scoreW = 88, scoreH = 22;
-  drawScorePill(scoreX, scoreY, scoreW, scoreH, currentTotal);
-
-  // 2. Wallet Coin Pill with glossy gold coin icon and total player coins
-  const coinPillX = W - 98, coinPillY = 38 + topInset, coinPillW = 88, coinPillH = 24;
+  // Wallet Coin Pill with glossy gold coin icon and total player coins (moved to top header)
+  const coinPillX = W - 98, coinPillY = 14 + topInset, coinPillW = 88, coinPillH = 24;
   drawWalletCoinPill(coinPillX, coinPillY, coinPillW, coinPillH, wallet, coinCounterBump);
 
   // Coins collected in current level indicator "+N" in gold next to the coin pill
@@ -6402,7 +6962,7 @@ function drawLevelCompletePopup() {
   drawGlossyButton(W / 2 - btnW / 2, cy + ch - 66, btnW, btnH, BUTTON_THEMES.green, `START LEVEL ${lvlNum + 1}`, null, isNextPressed, 22);
 
   // Wallet coin pill on top right
-  drawWalletCoinPill(W - 98, 38 + topInset, 88, 24, wallet, coinCounterBump);
+  drawWalletCoinPill(W - 98, 14 + topInset, 88, 24, wallet, coinCounterBump);
 
   // Draw Flying Coins above popup
   for (let i = 0; i < flyingCoins.length; i++) {
@@ -6411,7 +6971,7 @@ function drawLevelCompletePopup() {
     const spr = getCoinSprite(fc.type, curAnimFrame);
     if (spr) {
       ctx.save();
-      const glow = (fc.type === 'gem') ? '#38bdf8' : ((fc.type === 'gold') ? '#fde047' : ((fc.type === 'silver') ? '#cbd5e1' : '#fb923c'));
+      const glow = (fc.type === 'coin_100' || fc.type === 'gem') ? '#ffffff' : ((fc.type === 'coin_50' || fc.type === 'gold' || fc.type === 'silver') ? '#facc15' : '#fde047');
       ctx.shadowColor = glow;
       ctx.shadowBlur = 8;
       ctx.drawImage(spr, fc.curX - spr.width / 2, fc.curY - spr.height / 2);
@@ -6553,13 +7113,13 @@ function drawGameContent(dt = 0.016) {
     if (s.topSpikes) {
       const count = s.topSpikes.length;
       for (let j = 0; j < count; j++) {
-        drawSpike(x + j * 12, curTop - 18, true, s.topSpikes[j]);
+        drawSpike(x + j * 12, curTop - 18, true, s.topSpikes[j], j);
       }
     }
     if (s.botSpikes) {
       const count = s.botSpikes.length;
       for (let j = 0; j < count; j++) {
-        drawSpike(x + j * 12, curBot + 18, false, s.botSpikes[j]);
+        drawSpike(x + j * 12, curBot + 18, false, s.botSpikes[j], j);
       }
     }
   }
@@ -6623,7 +7183,7 @@ function drawGameContent(dt = 0.016) {
     const spr = getCoinSprite(fc.type, animFrame);
     if (spr) {
       ctx.save();
-      const glow = (fc.type === 'gem') ? '#38bdf8' : ((fc.type === 'gold') ? '#fde047' : ((fc.type === 'silver') ? '#cbd5e1' : '#fb923c'));
+      const glow = (fc.type === 'coin_100' || fc.type === 'gem') ? '#ffffff' : ((fc.type === 'coin_50' || fc.type === 'gold' || fc.type === 'silver') ? '#facc15' : '#fde047');
       ctx.shadowColor = glow;
       ctx.shadowBlur = 6;
       ctx.drawImage(spr, fc.curX - spr.width / 2, fc.curY - spr.height / 2);
@@ -6695,9 +7255,8 @@ function drawGameContent(dt = 0.016) {
     ctx.save();
     ctx.globalAlpha = menuAlpha;
 
-    // Top Right: Best score pill with gold star badge and Wallet Coin pill with gold coin
-    drawScorePill(W - 110, 16 + topInset, 98, 26, best, true);
-    drawWalletCoinPill(W - 110, 48 + topInset, 98, 26, wallet);
+    // Top Right: Wallet Coin pill with gold coin in top position (replacing BEST badge)
+    drawWalletCoinPill(W - 110, 16 + topInset, 98, 26, wallet);
 
     // Title Logo
     drawGlossyText('THORN RUSH', W / 2, 120 + topInset * 0.6, 46, 'center', '#ffffff', '#0f172a', 8);
@@ -7085,6 +7644,7 @@ window.addEventListener('resize', () => {
   resizeCanvas();
   prerenderVignette();
   prerenderStageBackgrounds();
+  prerenderAllStageSpikes();
   prerenderCoinFrames();
   initSpeedLines();
   initStageParticles();
@@ -7106,6 +7666,7 @@ prevBgStage = currentBgStage;
 bgCrossFadeTimer = 0;
 prerenderVignette();
 prerenderStageBackgrounds();
+prerenderAllStageSpikes();
 prerenderCoinFrames();
 initSpeedLines();
 initStageParticles();
