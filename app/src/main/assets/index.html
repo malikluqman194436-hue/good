@@ -351,7 +351,7 @@ function setSpeedMode(mode) {
 const ROAD_LANE_H = 36;
 let ROAD_TOP = 400;
 const CAR_DRAW_W = 142;
-let CAR_DRAW_H = 48;
+let CAR_DRAW_H = 42;
 let CAR_REST_Y = ROAD_TOP + 3;
 
 // Tunnel vertical positioning constants
@@ -369,18 +369,44 @@ const CAR_STOP_FRONT_X = 0.82 * W;    // screen X where front of car stops
 const CHARACTER_X = 0.89 * W;         // screen X where cheering character stands
 
 // Wheel numbers (fractions of trimmed picture: x from left, y from top, radius as fraction of width)
-const WHEEL_REAR_X = 0.215;
-const WHEEL_FRONT_X = 0.776;
-const WHEEL_Y = 0.775;
-const WHEEL_RADIUS = 0.07;
-const WHEEL_SPIN_RADIUS = 0.80 * WHEEL_RADIUS;
+const WHEEL_REAR_X = 0.151;
+const WHEEL_FRONT_X = 0.795;
+const WHEEL_Y = 0.706;
+const WHEEL_RADIUS = 0.0863;
+const WHEEL_SPIN_RADIUS = 0.62 * WHEEL_RADIUS;
 const SHOW_WHEEL_DEBUG = false;       // When true, draw thin green circles at wheel positions
 
-// Car visibility & glow constants
-const CAR_GLOW_COLOR = 'rgba(120, 230, 255, 0.55)';
-const CAR_GLOW_BLUR = 8;
+// Car visibility shadow constants (thin soft dark outline shadow so white car stays clear on bright backgrounds)
+const CAR_SHADOW_COLOR = 'rgba(0, 0, 0, 0.45)';
+const CAR_SHADOW_BLUR = 6;
+
+// ==========================================
+// JET THRUSTER FLAME CONSTANTS
+// ==========================================
+const SHOW_FLAMES = true;
+const NOZZLE_X = [0.29, 0.34, 0.39, 0.55, 0.60, 0.65];
+const NOZZLE_Y = 0.93;
+const NOZZLE_LEN = [1.6, 2.0, 1.4, 1.4, 2.0, 1.6];
+const POD_SLIDE_TIME = 0.15;
+const FLAME_FADE_OUT_TIME = 0.25;
 
 const lerp = (a, b, t) => a + (b - a) * t;
+
+// ==========================================
+// REFERENCE SPIKES & TUNNEL SCALE CONSTANTS
+// ==========================================
+const REFERENCE_SPIKES = false; // When true, uses only classic stud in silver, green and red
+
+const carVis = 42; // DRAWN height of the car on the screen (CAR_DRAW_H)
+const GAP_START = 3.4 * carVis; // 142.8px (~143px) at level 1
+const GAP_MIN = 2.6 * carVis;   // 109.2px (~109px) at level 40
+
+const SPIKE_H_SMALL = Math.round(0.45 * carVis);  // 19px
+const SPIKE_H_MEDIUM = Math.round(0.70 * carVis); // 29px
+const SPIKE_H_BIG = Math.round(1.0 * carVis);     // 42px
+
+const RAIL_THICKNESS = Math.round(0.28 * carVis); // 12px
+const RIVET_SPACING = Math.round(0.55 * carVis);  // 23px
 
 // ==========================================
 // DIFFICULTY PROGRESSION TUNING CONSTANTS
@@ -389,8 +415,8 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const LEVEL_GROWTH_TAU = 16.0;          // Smooth curve designed for 30-50 continuous levels
 const BASE_SCROLL_SPEED_RATIO = 0.31;   // Balanced engaging speed (~112 px/s)
 const SCROLL_SPEED_GROWTH = 0.35;       // Speed multiplier = 1 + 0.35 * f
-const GAP_LEVEL_1_RATIO = 6.2;         // Level 1 gap = 6.2 * carH (~248px, very spacious, open & fair)
-const GAP_MAX_DIFFICULTY_RATIO = 4.6;  // Max difficulty gap = 4.6 * carH (~184px, comfortable clearance)
+const GAP_LEVEL_1_RATIO = 3.4;         // Level 1 gap = 3.4 * carVis (142.8px)
+const GAP_MAX_DIFFICULTY_RATIO = 2.6;  // Max difficulty gap = 2.6 * carVis (109.2px)
 const STEP_MIN_RATIO = 0.28;            // Step dynamic range at level 1 (pleasant gentle undulations)
 const STEP_MAX_RATIO = 0.58;            // Step dynamic range at high levels (lively but fair)
 const SEG_LEN_LEVEL_1_RATIO = 1.15;     // Segment length ratio at level 1 (1.15 * base)
@@ -398,7 +424,7 @@ const SEG_LEN_MAX_RATIO = 0.88;         // Segment length ratio at high difficul
 const BASE_SEGMENT_LEN = 240;           // Base segment length in pixels
 const INTRA_LEVEL_GROWTH = 0.14;        // Difficulty rises gently inside each level
 const INTRA_LEVEL_EASY_FRACTION = 0.15; // First 15% of each level starts easier
-const SQUEEZE_GAP_RATIO = 3.45;         // Squeeze section gap = about 3.45 * carH (~138px)
+const SQUEEZE_GAP_RATIO = 2.4;          // Squeeze section gap = about 2.4 * carVis (~101px)
 const MOVE_RAIL_AMP_MIN = 10;           // Moving rail min amplitude in px
 const MOVE_RAIL_AMP_MAX = 0.5 * CAR_HITBOX_H; // Amplitude at most 0.5 * carH (20px)
 const MOVE_RAIL_SPEED_SLOW = 1.1;       // Slow gentle sine motion (Stage 4)
@@ -498,7 +524,7 @@ function mulberry32(a) {
 const LEVEL_PICTURE_URLS = [
   'image_e46b893e.png' // Custom flying islands background picture
 ];
-const CAR_IMAGE_URL = 'image_5d751a23.png';
+const CAR_IMAGE_URL = 'image_3abb7d58.png';
 const COIN_10_IMAGE_URL = 'coin_10.png';
 const COIN_50_IMAGE_URL = 'coin_50.png';
 const COIN_100_IMAGE_URL = 'coin_100.png';
@@ -518,6 +544,27 @@ let wheelSpritesReady = false;
 let wheelAngle = 0;
 let thrustSpinMultiplier = 1.0;
 let currentAngularSpeed = 0;
+
+let podDeploy = 0;
+let flameIntensity = 0;
+let flameSpriteCanvas = null;
+let sparkSpawnTimer = 0;
+
+const MAX_SPARKS = 45;
+const sparkPool = [];
+for (let i = 0; i < MAX_SPARKS; i++) {
+  sparkPool.push({
+    active: false,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    life: 0,
+    maxLife: 0.5,
+    size: 1.5,
+    color: '#fb923c'
+  });
+}
 
 const preloadedPictures = [];
 let finishedAssetsCount = 0;
@@ -969,16 +1016,47 @@ function createCustomAlloyRim(size = 256, styleKey = currentRimStyle) {
   return canv;
 }
 
+function extractRimSprite(sourceCanvas, centerX, centerY, radius) {
+  const d = Math.max(16, Math.ceil(radius * 2));
+  const rimCanvas = document.createElement('canvas');
+  rimCanvas.width = d;
+  rimCanvas.height = d;
+  const rCtx = rimCanvas.getContext('2d');
+  rCtx.save();
+  rCtx.beginPath();
+  rCtx.arc(d / 2, d / 2, radius, 0, Math.PI * 2);
+  rCtx.closePath();
+  rCtx.clip();
+  rCtx.drawImage(
+    sourceCanvas,
+    centerX - radius,
+    centerY - radius,
+    radius * 2,
+    radius * 2,
+    0,
+    0,
+    d,
+    d
+  );
+  rCtx.restore();
+  return rimCanvas;
+}
+
 function buildWheelSprites() {
+  if (!trimmedCarCanvas) return;
   try {
-    const sprite = createCustomAlloyRim(256, currentRimStyle);
-    if (sprite) {
-      rearWheelSprite = sprite;
-      frontWheelSprite = sprite;
-      wheelSpritesReady = true;
-    }
+    const tW = trimmedCarCanvas.width;
+    const tH = trimmedCarCanvas.height;
+    const rearCenterX = tW * WHEEL_REAR_X;
+    const frontCenterX = tW * WHEEL_FRONT_X;
+    const wheelCenterY = tH * WHEEL_Y;
+    const rimRadiusPx = tW * WHEEL_SPIN_RADIUS;
+
+    rearWheelSprite = extractRimSprite(trimmedCarCanvas, rearCenterX, wheelCenterY, rimRadiusPx);
+    frontWheelSprite = extractRimSprite(trimmedCarCanvas, frontCenterX, wheelCenterY, rimRadiusPx);
+    wheelSpritesReady = true;
   } catch (err) {
-    console.warn('Failed to build alloy wheel sprite:', err);
+    console.warn('Failed to build wheel rim sprites from car image:', err);
     rearWheelSprite = null;
     frontWheelSprite = null;
     wheelSpritesReady = false;
@@ -1004,7 +1082,446 @@ function cycleAlloyRimStyle() {
   showToast('Alloy Rim: ' + cfg.name);
 }
 
+// ==========================================
+// JET THRUSTER FLAME & NOZZLE POD RENDERING
+// ==========================================
+function buildFlameSprite() {
+  try {
+    const sprW = 64;
+    const sprH = 256;
+    const c = document.createElement('canvas');
+    c.width = sprW;
+    c.height = sprH;
+    const sCtx = c.getContext('2d');
+    const cx = sprW / 2;
+    const nozzleY = 14;
+
+    // Layer 1: Wide soft blue-violet glow around the nozzle (alpha 0.35)
+    const bgGlow = sCtx.createRadialGradient(cx, nozzleY + 4, 0, cx, nozzleY + 4, 28);
+    bgGlow.addColorStop(0, 'rgba(99, 102, 241, 0.35)');
+    bgGlow.addColorStop(0.5, 'rgba(129, 140, 248, 0.18)');
+    bgGlow.addColorStop(0.85, 'rgba(79, 70, 229, 0.05)');
+    bgGlow.addColorStop(1, 'rgba(79, 70, 229, 0)');
+    sCtx.fillStyle = bgGlow;
+    sCtx.beginPath();
+    sCtx.arc(cx, nozzleY + 4, 28, 0, Math.PI * 2);
+    sCtx.fill();
+
+    // Layer 2: Cyan-blue middle flame (narrows toward tip)
+    const midFlameTipY = 195;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - 9, nozzleY);
+    sCtx.bezierCurveTo(cx - 8, nozzleY + 50, cx - 4, nozzleY + 120, cx, midFlameTipY);
+    sCtx.bezierCurveTo(cx + 4, nozzleY + 120, cx + 8, nozzleY + 50, cx + 9, nozzleY);
+    sCtx.closePath();
+    const midGrad = sCtx.createLinearGradient(cx, nozzleY, cx, midFlameTipY);
+    midGrad.addColorStop(0, 'rgba(224, 242, 254, 0.95)');   // bright cyan-white
+    midGrad.addColorStop(0.15, 'rgba(56, 189, 248, 0.90)'); // cyan-blue
+    midGrad.addColorStop(0.45, 'rgba(14, 165, 233, 0.80)'); // vivid blue
+    midGrad.addColorStop(0.75, 'rgba(99, 102, 241, 0.55)'); // blue-violet
+    midGrad.addColorStop(0.92, 'rgba(236, 72, 153, 0.20)'); // pink edge
+    midGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');
+    sCtx.fillStyle = midGrad;
+    sCtx.fill();
+
+    // Layer 3: Thin orange-pink tail that extends further down and fades to transparent at the end
+    const tailTipY = 242;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - 3.5, nozzleY + 20);
+    sCtx.bezierCurveTo(cx - 3, nozzleY + 70, cx - 1.5, nozzleY + 150, cx, tailTipY);
+    sCtx.bezierCurveTo(cx + 1.5, nozzleY + 150, cx + 3, nozzleY + 70, cx + 3.5, nozzleY + 20);
+    sCtx.closePath();
+    const tailGrad = sCtx.createLinearGradient(cx, nozzleY + 20, cx, tailTipY);
+    tailGrad.addColorStop(0, 'rgba(253, 186, 116, 0.85)');    // warm bright orange
+    tailGrad.addColorStop(0.25, 'rgba(251, 146, 60, 0.80)');  // vibrant orange
+    tailGrad.addColorStop(0.55, 'rgba(244, 114, 182, 0.65)'); // orange-pink
+    tailGrad.addColorStop(0.80, 'rgba(236, 72, 153, 0.35)'); // soft pink
+    tailGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');        // transparent end
+    sCtx.fillStyle = tailGrad;
+    sCtx.fill();
+
+    // Layer 4: Hot white core at the nozzle (radius about 0.02 of car length; in sprite ~8px)
+    const coreGrad = sCtx.createRadialGradient(cx, nozzleY + 3, 0, cx, nozzleY + 3, 8);
+    coreGrad.addColorStop(0, '#ffffff');
+    coreGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.98)');
+    coreGrad.addColorStop(0.8, 'rgba(224, 242, 254, 0.85)');
+    coreGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    sCtx.fillStyle = coreGrad;
+    sCtx.beginPath();
+    sCtx.arc(cx, nozzleY + 3, 8, 0, Math.PI * 2);
+    sCtx.fill();
+
+    flameSpriteCanvas = c;
+  } catch (err) {
+    console.warn('Failed to pre-render flame sprite:', err);
+  }
+}
+buildFlameSprite();
+
+function drawJetFlames(ctx, drawW, drawH, gTime) {
+  if (!SHOW_FLAMES || flameIntensity <= 0.01 || !flameSpriteCanvas) return;
+
+  const podH = drawH * 0.05;
+  const baseNozzleY = -drawH / 2 + drawH * NOZZLE_Y;
+  const nozzleLipY = baseNozzleY + podH * podDeploy;
+
+  const flameW = drawW * 0.045; // Width at nozzle is about 0.045 of car length
+  const spriteTotalW = 64;
+  const spriteNozzleW = 18;
+  const spriteTotalH = 256;
+  const spriteFlameH = 228;
+  const spriteNozzleY = 14;
+
+  const scaleW = flameW * (spriteTotalW / spriteNozzleW);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = Math.min(1.0, flameIntensity * 1.15);
+
+  for (let i = 0; i < NOZZLE_X.length; i++) {
+    const nx = -drawW / 2 + drawW * NOZZLE_X[i];
+    // Fast flicker noise per flame
+    const noise = (Math.sin(gTime * 48 + i * 1.97) + Math.cos(gTime * 67 + i * 3.11)) * 0.25 + 0.5;
+    // Flame length = NOZZLE_LEN * carHeight * (0.35 + 0.65 * thrust) * (0.9 + 0.2 * noise)
+    const boostFlameMult = (boostTimer > 0) ? 1.55 : 1.0;
+    const flameLen = NOZZLE_LEN[i] * drawH * (0.35 + 0.65 * flameIntensity) * (0.9 + 0.2 * noise) * boostFlameMult;
+    // Slight sway
+    const swayAngle = Math.sin(gTime * 24 + i * 1.5) * 0.035;
+
+    const scaleH = flameLen * (spriteTotalH / spriteFlameH);
+    const topOffset = spriteNozzleY * (scaleH / spriteTotalH);
+
+    ctx.save();
+    ctx.translate(nx, nozzleLipY);
+    ctx.rotate(swayAngle);
+    ctx.drawImage(flameSpriteCanvas, -scaleW / 2, -topOffset, scaleW, scaleH);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawThrusterPods(ctx, drawW, drawH) {
+  if (!SHOW_FLAMES || podDeploy <= 0.01) return;
+
+  const podW = drawW * 0.03;
+  const podH = drawH * 0.05;
+  const baseNozzleY = -drawH / 2 + drawH * NOZZLE_Y;
+  const visibleH = podH * podDeploy;
+  const podTop = baseNozzleY;
+  const podBottom = baseNozzleY + visibleH;
+
+  ctx.save();
+  for (let i = 0; i < NOZZLE_X.length; i++) {
+    const nx = -drawW / 2 + drawW * NOZZLE_X[i];
+
+    // Dark metal cylinder gradient
+    const podGrad = ctx.createLinearGradient(nx - podW / 2, 0, nx + podW / 2, 0);
+    podGrad.addColorStop(0, '#111827');
+    podGrad.addColorStop(0.35, '#4b5563');
+    podGrad.addColorStop(0.7, '#374151');
+    podGrad.addColorStop(1, '#111827');
+    ctx.fillStyle = podGrad;
+    ctx.beginPath();
+    roundRect(ctx, nx - podW / 2, podTop, podW, visibleH, 0.6);
+    ctx.fill();
+
+    // Light ring at nozzle opening
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.ellipse(nx, podBottom - 0.3, podW * 0.46, 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Dark nozzle bore
+    ctx.fillStyle = '#030712';
+    ctx.beginPath();
+    ctx.ellipse(nx, podBottom - 0.3, podW * 0.38, 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function spawnSpark(x, y, flameLen, sp) {
+  for (let i = 0; i < sparkPool.length; i++) {
+    const s = sparkPool[i];
+    if (!s.active) {
+      s.active = true;
+      const startDist = flameLen * rnd(0.5, 0.95);
+      s.x = x + rnd(-2, 2);
+      s.y = y + startDist;
+      s.vx = rnd(-18, 12) - sp * 0.25; // drift back with world
+      s.vy = rnd(70, 150);             // fall down
+      s.life = 0;
+      s.maxLife = rnd(0.4, 0.7);        // living 0.4 to 0.7 seconds
+      s.size = rnd(1.0, 2.0);          // 1 to 2 px
+      s.color = Math.random() < 0.65 ? '#fb923c' : (Math.random() < 0.5 ? '#fdba74' : '#f472b6');
+      break;
+    }
+  }
+}
+
+function updateSparks(dt, sp) {
+  for (let i = 0; i < sparkPool.length; i++) {
+    const s = sparkPool[i];
+    if (!s.active) continue;
+    s.life += dt;
+    if (s.life >= s.maxLife) {
+      s.active = false;
+      continue;
+    }
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.vy += 80 * dt;
+  }
+}
+
+function drawSparks(ctx) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < sparkPool.length; i++) {
+    const s = sparkPool[i];
+    if (!s.active) continue;
+    const alpha = Math.max(0, 1 - s.life / s.maxLife);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = s.color;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ==========================================
+// PRE-RENDERED HAZARD SPRITES & OBJECT POOLS (Requirement 9)
+// ==========================================
+let sawBladeCanvas = null;
+let boostRingCanvas = null;
+let laserEmitterCanvas = null;
+let pendulumBallCanvas = null;
+
+function prerenderHazardSprites() {
+  try {
+    // 1. Saw Blade (64x64) with rotating teeth, metallic gradient disk, expansion cutouts & arbor nut
+    const sawC = document.createElement('canvas');
+    sawC.width = 64; sawC.height = 64;
+    const sCtx = sawC.getContext('2d');
+    const cx = 32, cy = 32, r = 24;
+
+    const teeth = 12;
+    sCtx.fillStyle = '#64748b';
+    sCtx.beginPath();
+    for (let i = 0; i < teeth; i++) {
+      const a1 = (i / teeth) * Math.PI * 2;
+      const a2 = ((i + 0.6) / teeth) * Math.PI * 2;
+      const a3 = ((i + 1) / teeth) * Math.PI * 2;
+      sCtx.lineTo(cx + Math.cos(a1) * (r - 4), cy + Math.sin(a1) * (r - 4));
+      sCtx.lineTo(cx + Math.cos(a2) * (r + 4), cy + Math.sin(a2) * (r + 4));
+      sCtx.lineTo(cx + Math.cos(a3) * (r - 2), cy + Math.sin(a3) * (r - 2));
+    }
+    sCtx.closePath();
+    sCtx.fill();
+
+    const grad = sCtx.createRadialGradient(cx - 4, cy - 4, 2, cx, cy, r);
+    grad.addColorStop(0, '#f8fafc');
+    grad.addColorStop(0.3, '#cbd5e1');
+    grad.addColorStop(0.7, '#64748b');
+    grad.addColorStop(1, '#1e293b');
+    sCtx.fillStyle = grad;
+    sCtx.beginPath();
+    sCtx.arc(cx, cy, r - 3, 0, Math.PI * 2);
+    sCtx.fill();
+
+    sCtx.strokeStyle = '#0f172a';
+    sCtx.lineWidth = 1.2;
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2;
+      sCtx.beginPath();
+      sCtx.arc(cx + Math.cos(a) * 11, cy + Math.sin(a) * 11, 2.5, 0, Math.PI * 2);
+      sCtx.stroke();
+    }
+
+    sCtx.fillStyle = '#0f172a';
+    sCtx.beginPath(); sCtx.arc(cx, cy, 6, 0, Math.PI * 2); sCtx.fill();
+    sCtx.fillStyle = '#f1f5f9';
+    sCtx.beginPath(); sCtx.arc(cx - 1.5, cy - 1.5, 2, 0, Math.PI * 2); sCtx.fill();
+    sawBladeCanvas = sawC;
+
+    // 2. Boost Ring (64x64) with glowing toroid and forward chevron
+    const ringC = document.createElement('canvas');
+    ringC.width = 64; ringC.height = 64;
+    const rCtx = ringC.getContext('2d');
+    const rcx = 32, rcy = 32, rr = 22;
+
+    rCtx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+    rCtx.lineWidth = 6;
+    rCtx.beginPath(); rCtx.arc(rcx, rcy, rr, 0, Math.PI * 2); rCtx.stroke();
+
+    rCtx.strokeStyle = '#ffffff';
+    rCtx.lineWidth = 2.5;
+    rCtx.beginPath(); rCtx.arc(rcx, rcy, rr, 0, Math.PI * 2); rCtx.stroke();
+
+    rCtx.strokeStyle = '#38bdf8';
+    rCtx.lineWidth = 3.2;
+    rCtx.lineCap = 'round';
+    rCtx.beginPath();
+    rCtx.moveTo(rcx - 6, rcy - 8);
+    rCtx.lineTo(rcx + 6, rcy);
+    rCtx.lineTo(rcx - 6, rcy + 8);
+    rCtx.stroke();
+    boostRingCanvas = ringC;
+
+    // 3. Laser Emitter (32x24) industrial box
+    const emC = document.createElement('canvas');
+    emC.width = 32; emC.height = 24;
+    const eCtx = emC.getContext('2d');
+    eCtx.fillStyle = '#1e293b';
+    roundRect(eCtx, 2, 2, 28, 20, 3);
+    eCtx.fill();
+    eCtx.strokeStyle = '#0f172a';
+    eCtx.lineWidth = 1.5;
+    roundRect(eCtx, 2, 2, 28, 20, 3);
+    eCtx.stroke();
+    eCtx.fillStyle = '#eab308';
+    eCtx.fillRect(6, 4, 20, 3);
+    eCtx.fillStyle = '#0284c7';
+    eCtx.beginPath(); eCtx.arc(16, 15, 5, 0, Math.PI * 2); eCtx.fill();
+    eCtx.fillStyle = '#ffffff';
+    eCtx.beginPath(); eCtx.arc(15, 14, 1.8, 0, Math.PI * 2); eCtx.fill();
+    laserEmitterCanvas = emC;
+
+    // 4. Pendulum Ball (56x56) spiked iron sphere
+    const pC = document.createElement('canvas');
+    pC.width = 56; pC.height = 56;
+    const pCtx = pC.getContext('2d');
+    const pcx = 28, pcy = 28, pr = 18;
+
+    pCtx.fillStyle = '#334155';
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const tipX = pcx + Math.cos(a) * (pr + 7);
+      const tipY = pcy + Math.sin(a) * (pr + 7);
+      const b1x = pcx + Math.cos(a - 0.2) * pr;
+      const b1y = pcy + Math.sin(a - 0.2) * pr;
+      const b2x = pcx + Math.cos(a + 0.2) * pr;
+      const b2y = pcy + Math.sin(a + 0.2) * pr;
+      pCtx.beginPath();
+      pCtx.moveTo(b1x, b1y);
+      pCtx.lineTo(tipX, tipY);
+      pCtx.lineTo(b2x, b2y);
+      pCtx.closePath();
+      pCtx.fill();
+    }
+
+    const pGrad = pCtx.createRadialGradient(pcx - 5, pcy - 5, 2, pcx, pcy, pr);
+    pGrad.addColorStop(0, '#94a3b8');
+    pGrad.addColorStop(0.3, '#475569');
+    pGrad.addColorStop(0.8, '#1e293b');
+    pGrad.addColorStop(1, '#090d16');
+    pCtx.fillStyle = pGrad;
+    pCtx.beginPath(); pCtx.arc(pcx, pcy, pr, 0, Math.PI * 2); pCtx.fill();
+    pCtx.strokeStyle = '#0f172a';
+    pCtx.lineWidth = 1.4;
+    pCtx.beginPath(); pCtx.arc(pcx, pcy, pr, 0, Math.PI * 2); pCtx.stroke();
+    pCtx.strokeStyle = '#64748b';
+    pCtx.lineWidth = 2.5;
+    pCtx.beginPath(); pCtx.arc(pcx, pcy - pr - 1, 4, Math.PI, 0); pCtx.stroke();
+    pendulumBallCanvas = pC;
+  } catch(err) {
+    console.warn('Failed to prerender hazard sprites:', err);
+  }
+}
+prerenderHazardSprites();
+
+// Object pool for shattered falling spike shards & hazard sparks (60fps performance)
+const HAZARD_PARTICLE_MAX = 64;
+const hazardParticlePool = [];
+for (let i = 0; i < HAZARD_PARTICLE_MAX; i++) {
+  hazardParticlePool.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 0, color: '#ffffff' });
+}
+
+function spawnHazardShards(x, y, color = '#cbd5e1') {
+  for (let k = 0; k < 6; k++) {
+    for (let i = 0; i < HAZARD_PARTICLE_MAX; i++) {
+      const p = hazardParticlePool[i];
+      if (!p.active) {
+        p.active = true;
+        p.x = x + (Math.random() - 0.5) * 8;
+        p.y = y + (Math.random() - 0.5) * 6;
+        p.vx = (Math.random() - 0.5) * 160;
+        p.vy = -Math.random() * 120 - 40;
+        p.life = 0;
+        p.maxLife = 0.35 + Math.random() * 0.25;
+        p.size = 2 + Math.random() * 2.5;
+        p.color = color;
+        break;
+      }
+    }
+  }
+}
+
+function updateHazardParticles(dt) {
+  for (let i = 0; i < hazardParticlePool.length; i++) {
+    const p = hazardParticlePool[i];
+    if (!p.active) continue;
+    p.life += dt;
+    if (p.life >= p.maxLife) {
+      p.active = false;
+      continue;
+    }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 320 * dt;
+  }
+}
+
+function drawHazardParticles(ctx) {
+  ctx.save();
+  for (let i = 0; i < hazardParticlePool.length; i++) {
+    const p = hazardParticlePool[i];
+    if (!p.active) continue;
+    const px = p.x - cam;
+    if (px < -20 || px > W + 20) continue;
+    const alpha = Math.max(0, 1 - p.life / p.maxLife);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(px, p.y, p.size, p.size);
+  }
+  ctx.restore();
+}
+
+// Floating Text Popups (e.g. BOOST!)
+const floatingTexts = [];
+function spawnFloatingText(text, x, y, color = '#38bdf8') {
+  floatingTexts.push({ text, x, y, vy: -45, life: 1.2, maxLife: 1.2, color });
+}
+
+function updateFloatingTexts(dt) {
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.y += ft.vy * dt;
+    ft.life -= dt;
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+}
+
+function drawFloatingTexts() {
+  if (!floatingTexts || floatingTexts.length === 0) return;
+  for (let i = 0; i < floatingTexts.length; i++) {
+    const ft = floatingTexts[i];
+    const alpha = Math.min(1.0, ft.life / 0.35);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawGlossyText(ft.text, ft.x, ft.y, 16, 'center', ft.color, '#0f172a', 3.5);
+    ctx.restore();
+  }
+}
+
+let boostTimer = 0;
+let activeFallingSpike = null;
+
 function initAssetPreloading() {
+  buildFlameSprite();
+  prerenderHazardSprites();
   try {
     // 1. Preload Level Pictures concurrently
     LEVEL_PICTURE_URLS.forEach((url, idx) => {
@@ -1560,14 +2077,190 @@ function playPerfectBonusSound() {
   } catch(e) {}
 }
 
+function playBoostSound() {
+  if (!soundEnabled) return;
+  ensureAudioContext();
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.exponentialRampToValueAtTime(720, now + 0.32);
+    osc.frequency.exponentialRampToValueAtTime(260, now + 0.75);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(500, now);
+    filter.frequency.exponentialRampToValueAtTime(3200, now + 0.25);
+    filter.frequency.exponentialRampToValueAtTime(600, now + 0.75);
+    g.gain.setValueAtTime(0.01, now);
+    g.gain.linearRampToValueAtTime(0.28, now + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(masterGain || audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.75);
+  } catch(e) {}
+}
+
 // ==========================================
 // PROCEDURAL LEVEL CONFIG & FALLBACK SCENES
 // ==========================================
-const SHAPE_TYPES = [
-  'cone', 'needle', 'fat stud', 'double-cone', 'faceted crystal',
-  'curved thorn', 'fork', 'saw tooth', 'bullet', 'flame-shaped'
+// ==========================================
+// PROCEDURAL LEVEL CONFIG & STUD FAMILIES
+// ==========================================
+const STUD_RATIOS = {
+  classic: 2.4,
+  needle: 3.6,
+  fat: 1.6,
+  double_cone: 2.2,
+  crystal: 2.3,
+  curved_thorn: 2.5,
+  mace: 2.2,
+  bullet: 2.1,
+  flame: 2.4
+};
+
+const STAGE_STUD_THEMES = [
+  {
+    name: 'Desert Highway',
+    mainColor: '#d1d5db', // Steel silver
+    accentColor: '#ff8a1f', // Orange glow
+    glowColor: '#ff8a1f',
+    railColor: '#2d3748',
+    families: ['classic', 'needle', 'fat']
+  },
+  {
+    name: 'Neon City',
+    mainColor: '#06b6d4', // Cyan
+    accentColor: '#ec4899', // Magenta
+    glowColor: '#ec4899',
+    railColor: '#1e293b',
+    families: ['classic', 'double_cone', 'needle']
+  },
+  {
+    name: 'Frozen Peaks',
+    mainColor: '#7dd3fc', // Ice blue
+    accentColor: '#ffffff', // White
+    glowColor: '#38bdf8',
+    railColor: '#334155',
+    families: ['crystal', 'needle', 'fat']
+  },
+  {
+    name: 'Volcano Core',
+    mainColor: '#374151', // Dark rock
+    accentColor: '#ff5722', // Lava orange
+    glowColor: '#ff5722',
+    railColor: '#1c1917',
+    families: ['bullet', 'mace', 'flame']
+  },
+  {
+    name: 'Cyber Factory',
+    mainColor: '#eab308', // Yellow
+    accentColor: '#18181b', // Black
+    glowColor: '#facc15',
+    railColor: '#27272a',
+    families: ['classic', 'fat', 'double_cone']
+  },
+  {
+    name: 'Alien Jungle',
+    mainColor: '#a855f7', // Violet
+    accentColor: '#22c55e', // Green
+    glowColor: '#22c55e',
+    railColor: '#1e1b4b',
+    families: ['curved_thorn', 'needle', 'bullet']
+  },
+  {
+    name: 'Ocean Ruins',
+    mainColor: '#f43f5e', // Coral pink
+    accentColor: '#14b8a6', // Teal
+    glowColor: '#14b8a6',
+    railColor: '#0f172a',
+    families: ['curved_thorn', 'fat', 'crystal']
+  },
+  {
+    name: 'Space Station',
+    mainColor: '#8b5cf6', // Violet
+    accentColor: '#e2e8f0', // White
+    glowColor: '#c084fc',
+    railColor: '#090d16',
+    families: ['crystal', 'mace', 'double_cone']
+  }
 ];
-const RAIL_STYLES = ['rivets', 'bolts', 'small gears', 'chain links', 'dots'];
+
+function hexToRgb(hex) {
+  if (!hex || typeof hex !== 'string') return { r: 255, g: 255, b: 255 };
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x + x).join('');
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return { r: 255, g: 255, b: 255 };
+  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+
+function rgbToHex(r, g, b) {
+  const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+  return '#' + [clamp(r), clamp(g), clamp(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+function adjustColor(hex, amount) {
+  const { r, g, b } = hexToRgb(hex);
+  if (amount > 0) {
+    return rgbToHex(r + (255 - r) * amount, g + (255 - g) * amount, b + (255 - b) * amount);
+  } else {
+    return rgbToHex(r * (1 + amount), g * (1 + amount), b * (1 + amount));
+  }
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) { h = s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h: h * 360, s, l };
+}
+
+function hslToRgb(h, s, l) {
+  h = (h % 360 + 360) % 360;
+  h /= 360;
+  let r, g, b;
+  if (s === 0) { r = g = b = l; }
+  else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  return { r: r * 255, g: g * 255, b: b * 255 };
+}
+
+function shiftHue(hex, deltaDeg) {
+  const { r, g, b } = hexToRgb(hex);
+  const hsl = rgbToHsl(r, g, b);
+  hsl.h += deltaDeg;
+  const rgb = hslToRgb(hsl.h, hsl.s, hsl.l);
+  return rgbToHex(rgb.r, rgb.g, rgb.b);
+}
 
 function getSceneType(level) {
   return (getStageNumber(level) - 1) % STAGES.length;
@@ -1576,84 +2269,121 @@ function getSceneType(level) {
 function generateLevelConfig(level, prev) {
   const sceneId = getSceneType(level);
   const stage = getStage(level);
+  const stageNum = getStageNumber(level);
   const seed = hashInt(level * 10007 + 773);
   const rng = mulberry32(seed);
-  const pick = arr => arr[Math.floor(rng() * arr.length)];
-  const range = (a, b) => a + rng() * (b - a);
 
-  let H = Math.round((level * 137.508) % 360);
-  const name = stage.name;
+  if (typeof REFERENCE_SPIKES !== 'undefined' && REFERENCE_SPIKES) {
+    return {
+      level,
+      sceneId: 0,
+      name: stage ? stage.name : 'Desert Highway',
+      H: 195,
+      bgTop: '#48cae4',
+      bgBot: '#caf0f8',
+      cloudColor: '#ffffff',
+      stage,
+      families: ['classic'],
+      colors: [
+        {
+          main: '#d1d5db',
+          light: '#f1f5f9',
+          dark: '#64748b',
+          accent: '#ff8a1f',
+          glow: '#ff8a1f'
+        }
+      ],
+      railColor: '#2d3748',
+      accentColor: '#ff8a1f',
+      glowColor: '#ff8a1f',
+      rivetStyle: 'round',
+      isTwoColor: false,
+      groupSize: 4
+    };
+  }
+
+  // Base stage theme
+  const themeIdx = (stageNum - 1) % STAGE_STUD_THEMES.length;
+  const baseTheme = STAGE_STUD_THEMES[themeIdx];
+
+  // Shift stage hue by -25 to +25 degrees from level seed
+  const hueShift = Math.round(rng() * 50 - 25);
+  const shiftedMain = shiftHue(baseTheme.mainColor, hueShift);
+  const shiftedAccent = shiftHue(baseTheme.accentColor, hueShift);
+  const shiftedGlow = shiftHue(baseTheme.glowColor, hueShift);
+  const shiftedRail = shiftHue(baseTheme.railColor, Math.round(hueShift * 0.35));
+
+  // Available families for this stage
+  let stageFamilies = baseTheme.families.slice();
+  if (stageNum > 8) {
+    // Stage 9+: pick 3 families from stage seed
+    const allFamilies = Object.keys(STUD_RATIOS);
+    const stageRng = mulberry32(hashInt(stageNum * 911 + 43));
+    const shuffled = allFamilies.slice().sort(() => stageRng() - 0.5);
+    stageFamilies = shuffled.slice(0, 3);
+  }
+
+  // Pick 2 or 3 of stage's families for this level
+  const numPick = (rng() < 0.5 || stageFamilies.length <= 2) ? 2 : 3;
+  const shuffledFamilies = stageFamilies.slice().sort(() => rng() - 0.5);
+  const levelFamilies = shuffledFamilies.slice(0, Math.min(numPick, stageFamilies.length));
+
+  // Rail rivet style: round rivets, hex bolts, or small gears
+  const rivetStyles = ['round', 'hex', 'gear'];
+  const rivetStyle = rivetStyles[Math.floor(rng() * rivetStyles.length)];
+
+  // In ~1 level in 4: two-color pattern alternating in groups of 3 to 6
+  const isTwoColor = (level % 4 === 0 || rng() < 0.25);
+  const groupSize = Math.floor(3 + rng() * 4); // 3 to 6
+
+  const color0 = {
+    main: shiftedMain,
+    light: adjustColor(shiftedMain, 0.40),
+    dark: adjustColor(shiftedMain, -0.45),
+    accent: shiftedAccent,
+    glow: shiftedGlow
+  };
+
+  const color1 = {
+    main: shiftedAccent,
+    light: adjustColor(shiftedAccent, 0.40),
+    dark: adjustColor(shiftedAccent, -0.45),
+    accent: shiftedMain,
+    glow: shiftedGlow
+  };
+
+  const colors = isTwoColor ? [color0, color1] : [color0];
 
   let bgTop, bgBot, cloudColor;
   switch (sceneId) {
-    case 0:
-      bgTop = '#48cae4'; bgBot = '#caf0f8'; cloudColor = '#ffffff'; H = 195;
-      break;
-    case 1:
-      bgTop = '#00b4d8'; bgBot = '#ffd166'; cloudColor = '#ffffff'; H = 45;
-      break;
-    case 2:
-      bgTop = '#ff70a6'; bgBot = '#ffd670'; cloudColor = '#fff0f5'; H = 330;
-      break;
-    case 3:
-      bgTop = '#7097c2'; bgBot = '#dceaf7'; cloudColor = '#ffffff'; H = 210;
-      break;
-    case 4:
-      bgTop = '#f77f00'; bgBot = '#fcbf49'; cloudColor = '#fff5eb'; H = 35;
-      break;
-    case 5:
-      bgTop = '#2ec4b6'; bgBot = '#cbf3f0'; cloudColor = '#f0fff4'; H = 150;
-      break;
-    case 6:
-      bgTop = '#240046'; bgBot = '#7b2cbf'; cloudColor = '#ff9e00'; H = 275;
-      break;
-    case 7:
-      bgTop = '#023e8a'; bgBot = '#0096c7'; cloudColor = '#90e0ef'; H = 190;
-      break;
+    case 0: bgTop = '#48cae4'; bgBot = '#caf0f8'; cloudColor = '#ffffff'; break;
+    case 1: bgTop = '#00b4d8'; bgBot = '#ffd166'; cloudColor = '#ffffff'; break;
+    case 2: bgTop = '#ff70a6'; bgBot = '#ffd670'; cloudColor = '#fff0f5'; break;
+    case 3: bgTop = '#7097c2'; bgBot = '#dceaf7'; cloudColor = '#ffffff'; break;
+    case 4: bgTop = '#f77f00'; bgBot = '#fcbf49'; cloudColor = '#fff5eb'; break;
+    case 5: bgTop = '#2ec4b6'; bgBot = '#cbf3f0'; cloudColor = '#f0fff4'; break;
+    case 6: bgTop = '#240046'; bgBot = '#7b2cbf'; cloudColor = '#ff9e00'; break;
+    case 7: bgTop = '#023e8a'; bgBot = '#0096c7'; cloudColor = '#90e0ef'; break;
+    default: bgTop = '#48cae4'; bgBot = '#caf0f8'; cloudColor = '#ffffff'; break;
   }
-
-  if (level > 8) {
-    const shift = Math.floor(rng() * 40) - 20;
-    H = (H + shift + 360) % 360;
-  }
-
-  const shapeType = pick(SHAPE_TYPES);
-  const width = Math.round(range(10, 15));
-  const heightRatio = +(range(1.6, 2.8)).toFixed(2);
-  const tipSharpness = pick(['sharp', 'medium', 'rounded']);
-  const collarRing = rng() > 0.35;
-  const bend = +(range(-0.3, 0.3)).toFixed(2);
-  const railStyle = pick(RAIL_STYLES);
-
-  const spikeSat = Math.round(range(75, 95));
-  const spikeLit = Math.round(range(44, 56));
-  const spikeColor = { h: H, s: spikeSat, l: spikeLit };
-  const railColor = (stage && stage.railColor) ? stage.railColor : `hsl(${H}, 35%, 52%)`;
-  const accentColor = (stage && stage.accent) ? stage.accent : `hsl(${H}, 90%, 50%)`;
-  const glowColor = accentColor;
-  const spikeStyle = (stage && stage.spikeStyle) ? stage.spikeStyle : 'steel cone studs';
 
   return {
     level,
     sceneId,
-    name,
-    H,
+    name: stage ? stage.name : baseTheme.name,
+    H: Math.round((level * 137.508) % 360),
     bgTop,
     bgBot,
     cloudColor,
-    spikeColor,
-    shapeType,
-    width,
-    heightRatio,
-    tipSharpness,
-    collarRing,
-    bend,
-    railStyle,
-    railColor,
-    accentColor,
-    glowColor,
-    spikeStyle,
-    stage
+    stage,
+    families: levelFamilies,
+    colors,
+    railColor: shiftedRail,
+    accentColor: shiftedAccent,
+    glowColor: shiftedGlow,
+    rivetStyle,
+    isTwoColor,
+    groupSize
   };
 }
 
@@ -1703,645 +2433,489 @@ function hexToRgba(hex, alpha = 1) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-let stageSpikeCanvases = [];
-
-function renderStageSpike(canvas, isTop, h, stage, variant = 0) {
+function renderStageStud(canvas, isTop, h, family, col) {
   const sCtx = canvas.getContext('2d');
   sCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const cx = 20;
-  const baseY = isTop ? 4 : 48;
+  const cx = 27;
   const dir = isTop ? 1 : -1;
+  const baseY = isTop ? 6 : 58;
   const tipY = baseY + dir * h;
-  const w = (h <= 14) ? 11 : ((h <= 24) ? 13 : 15);
+  const ratio = STUD_RATIOS[family] || 2.4;
+  const w = Math.max(6, Math.round(h / ratio));
   const halfW = w / 2;
-  const tipX = cx;
 
-  const style = (stage && stage.spikeStyle) ? stage.spikeStyle : 'steel cone studs';
-  const accent = (stage && stage.accent) ? stage.accent : '#ff8a1f';
-  const accent2 = (stage && stage.accentSecondary) ? stage.accentSecondary : '#ff3fb0';
-  const outlineColor = '#0a0f1d';
+  // 1. THE BASE COLLAR (about 22 percent of spike height, slightly wider than cone, thin darker ring line at top)
+  const collarH = Math.max(2, Math.round(h * 0.22));
+  const collarW = Math.max(w + 2, Math.round(w * 1.15));
+  const coneBaseY = baseY + dir * collarH;
+  const coneH = h - collarH;
+
+  const mainColor = (col && col.main) ? col.main : '#d1d5db';
+  const lightColor = (col && col.light) ? col.light : adjustColor(mainColor, 0.40);
+  const darkColor = (col && col.dark) ? col.dark : adjustColor(mainColor, -0.45);
+  const accentColor = (col && col.accent) ? col.accent : '#ff8a1f';
+  const outlineColor = '#0a0d14';
 
   sCtx.save();
 
-  // 1. Soft glow around the tips in the stage's accent color (Requirement 1)
-  const glowR = Math.min(11, Math.max(7, h * 0.42));
-  const glowGrad = sCtx.createRadialGradient(tipX, tipY, 0, tipX, tipY, glowR);
-  glowGrad.addColorStop(0, hexToRgba(accent, 0.90));
-  glowGrad.addColorStop(0.50, hexToRgba(accent, 0.40));
-  glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  sCtx.fillStyle = glowGrad;
+  // Draw Base Collar (cylindrical collar with 3D gradient)
+  const collarTop = isTop ? baseY : (baseY - collarH);
+  const cGrad = sCtx.createLinearGradient(cx - collarW / 2, 0, cx + collarW / 2, 0);
+  cGrad.addColorStop(0.0, lightColor);
+  cGrad.addColorStop(0.35, mainColor);
+  cGrad.addColorStop(0.70, darkColor);
+  cGrad.addColorStop(1.0, adjustColor(darkColor, -0.25));
+  sCtx.fillStyle = cGrad;
+  sCtx.fillRect(cx - collarW / 2, collarTop, collarW, collarH);
+
+  // Darker ring line at top of collar where cone meets collar
+  sCtx.strokeStyle = adjustColor(darkColor, -0.5);
+  sCtx.lineWidth = 1;
   sCtx.beginPath();
-  sCtx.arc(tipX, tipY, glowR, 0, Math.PI * 2);
-  sCtx.fill();
+  sCtx.moveTo(cx - collarW / 2, coneBaseY);
+  sCtx.lineTo(cx + collarW / 2, coneBaseY);
+  sCtx.stroke();
 
-  if (style === 'steel cone studs') {
-    // Style 1: Desert Highway - Steel cone studs
-    const gLight = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-    gLight.addColorStop(0, '#f8fafc');
-    gLight.addColorStop(0.5, '#cbd5e1');
-    gLight.addColorStop(1, '#94a3b8');
-    sCtx.fillStyle = gLight;
+  // Collar thin outline
+  sCtx.strokeStyle = outlineColor;
+  sCtx.lineWidth = 0.8;
+  sCtx.strokeRect(cx - collarW / 2, collarTop, collarW, collarH);
+
+  // 2. CONE BODY BY FAMILY
+  if (family === 'needle') {
+    // NEEDLE (ratio 3.6 to 1, thin razor sharp)
+    const gL = sCtx.createLinearGradient(cx - halfW, 0, cx, 0);
+    gL.addColorStop(0, lightColor);
+    gL.addColorStop(1, mainColor);
+    sCtx.fillStyle = gL;
     sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx, baseY);
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx, coneBaseY);
     sCtx.closePath();
     sCtx.fill();
 
-    const gDark = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-    gDark.addColorStop(0, '#64748b');
-    gDark.addColorStop(0.6, '#334155');
-    gDark.addColorStop(1, '#1e293b');
-    sCtx.fillStyle = gDark;
+    const gR = sCtx.createLinearGradient(cx, 0, cx + halfW, 0);
+    gR.addColorStop(0, mainColor);
+    gR.addColorStop(1, darkColor);
+    sCtx.fillStyle = gR;
     sCtx.beginPath();
-    sCtx.moveTo(cx, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.moveTo(cx, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
     sCtx.closePath();
     sCtx.fill();
 
-    // Riveted base collar
-    const crH = 3.5;
-    const crY = isTop ? baseY : baseY - crH;
-    sCtx.fillStyle = '#475569';
-    sCtx.fillRect(cx - (w + 4) / 2, crY, w + 4, crH);
-    sCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    sCtx.fillRect(cx - (w + 4) / 2, crY, w + 4, 1);
-    sCtx.fillStyle = '#0f172a';
-    sCtx.beginPath(); sCtx.arc(cx, crY + crH / 2, 1.2, 0, Math.PI * 2); sCtx.fill();
+    // Fine highlight stripe
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.45, coneBaseY);
+    sCtx.lineTo(cx - 0.5, tipY - dir * 1.5);
+    sCtx.stroke();
 
-    // Glossy 3D highlight stripe on left side
+    // Outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.stroke();
+
+    // Specular dot
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(cx, tipY - dir * 1, 1, 0, Math.PI * 2);
+    sCtx.fill();
+
+  } else if (family === 'fat') {
+    // FAT STUD (ratio 1.6 to 1, wide and blunt)
+    const tipW = Math.max(2.5, w * 0.22);
+    const gBody = sCtx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+    gBody.addColorStop(0.0, lightColor);
+    gBody.addColorStop(0.18, '#ffffff');
+    gBody.addColorStop(0.40, mainColor);
+    gBody.addColorStop(0.70, darkColor);
+    gBody.addColorStop(1.0, adjustColor(darkColor, -0.2));
+    sCtx.fillStyle = gBody;
+
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - tipW / 2, tipY);
+    sCtx.lineTo(cx + tipW / 2, tipY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Broad highlight stripe
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    sCtx.lineWidth = Math.max(1.5, w * 0.18);
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.5, coneBaseY);
+    sCtx.lineTo(cx - tipW * 0.4, tipY - dir * 1.5);
+    sCtx.stroke();
+
+    // Outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - tipW / 2, tipY);
+    sCtx.lineTo(cx + tipW / 2, tipY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.stroke();
+
+    // Blunt cap specular
+    sCtx.fillStyle = '#ffffff';
+    sCtx.fillRect(cx - tipW * 0.3, tipY - dir * 0.8, tipW * 0.6, 1);
+
+  } else if (family === 'double_cone') {
+    // DOUBLE CONE (ratio 2.2 to 1, two stacked cones with a ring between)
+    const midY = coneBaseY + dir * (coneH * 0.50);
+    const midW = halfW * 0.58;
+
+    // Lower cone
+    const gL1 = sCtx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+    gL1.addColorStop(0.0, lightColor);
+    gL1.addColorStop(0.4, mainColor);
+    gL1.addColorStop(0.8, darkColor);
+    sCtx.fillStyle = gL1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - midW, midY);
+    sCtx.lineTo(cx + midW, midY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Divider ring
+    const ringH = Math.max(1.5, Math.round(coneH * 0.08));
+    sCtx.fillStyle = '#cbd5e1';
+    sCtx.fillRect(cx - midW - 1, midY - dir * (ringH / 2), (midW + 1) * 2, ringH);
+    sCtx.strokeStyle = outlineColor;
+    sCtx.strokeRect(cx - midW - 1, midY - dir * (ringH / 2), (midW + 1) * 2, ringH);
+
+    // Upper cone
+    const gL2 = sCtx.createLinearGradient(cx - midW, 0, cx + midW, 0);
+    gL2.addColorStop(0.0, lightColor);
+    gL2.addColorStop(0.4, mainColor);
+    gL2.addColorStop(0.8, darkColor);
+    sCtx.fillStyle = gL2;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - midW, midY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx + midW, midY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Outlines & highlights
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - midW, midY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx + midW, midY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.stroke();
+
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    sCtx.lineWidth = 1.2;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.5, coneBaseY);
+    sCtx.lineTo(cx - 0.6, tipY - dir * 1.5);
+    sCtx.stroke();
+
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(cx, tipY - dir * 1.2, 1.1, 0, Math.PI * 2);
+    sCtx.fill();
+
+  } else if (family === 'crystal') {
+    // FACETED CRYSTAL (ratio 2.3 to 1, 4 visible facets with distinct brightness)
+    const f1 = adjustColor(lightColor, 0.40);
+    const f2 = lightColor;
+    const f3 = mainColor;
+    const f4 = darkColor;
+
+    // Facet 1 (far left)
+    sCtx.fillStyle = f1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - halfW * 0.35, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Facet 2 (mid left)
+    sCtx.fillStyle = f2;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.35, coneBaseY);
+    sCtx.lineTo(cx, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Facet 3 (mid right)
+    sCtx.fillStyle = f3;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, coneBaseY);
+    sCtx.lineTo(cx + halfW * 0.45, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Facet 4 (far right)
+    sCtx.fillStyle = f4;
+    sCtx.beginPath();
+    sCtx.moveTo(cx + halfW * 0.45, coneBaseY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Facet edge lines
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    sCtx.lineWidth = 0.8;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.35, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.moveTo(cx, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.stroke();
+
+    // Outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.stroke();
+
+    // Specular dot
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(cx, tipY - dir * 1.2, 1.2, 0, Math.PI * 2);
+    sCtx.fill();
+
+  } else if (family === 'curved_thorn') {
+    // CURVED THORN (ratio 2.5 to 1, tip bends to one side by 25 percent width)
+    const bend = w * 0.25;
+    const tipX = cx + bend;
+
+    const gThorn = sCtx.createLinearGradient(cx - halfW, 0, cx + halfW + bend, 0);
+    gThorn.addColorStop(0.0, lightColor);
+    gThorn.addColorStop(0.25, '#ffffff');
+    gThorn.addColorStop(0.50, mainColor);
+    gThorn.addColorStop(0.85, darkColor);
+    sCtx.fillStyle = gThorn;
+
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.quadraticCurveTo(cx - halfW * 0.2 + bend * 0.4, coneBaseY + dir * coneH * 0.6, tipX, tipY);
+    sCtx.quadraticCurveTo(cx + halfW * 0.3 + bend * 0.4, coneBaseY + dir * coneH * 0.6, cx + halfW, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Curved highlight
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    sCtx.lineWidth = 1.2;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.4, coneBaseY);
+    sCtx.quadraticCurveTo(cx - halfW * 0.1 + bend * 0.4, coneBaseY + dir * coneH * 0.6, tipX - 0.5, tipY - dir * 1.5);
+    sCtx.stroke();
+
+    // Outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.quadraticCurveTo(cx - halfW * 0.2 + bend * 0.4, coneBaseY + dir * coneH * 0.6, tipX, tipY);
+    sCtx.quadraticCurveTo(cx + halfW * 0.3 + bend * 0.4, coneBaseY + dir * coneH * 0.6, cx + halfW, coneBaseY);
+    sCtx.stroke();
+
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(tipX, tipY - dir * 1, 1.1, 0, Math.PI * 2);
+    sCtx.fill();
+
+  } else if (family === 'mace') {
+    // MACE STUD (ratio 2.2 to 1, cone ending in a small ball)
+    const ballR = Math.max(2.4, w * 0.26);
+    const ballY = tipY - dir * ballR;
+
+    // Cone stem
+    const gStem = sCtx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+    gStem.addColorStop(0.0, lightColor);
+    gStem.addColorStop(0.45, mainColor);
+    gStem.addColorStop(0.85, darkColor);
+    sCtx.fillStyle = gStem;
+
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - ballR * 0.7, ballY);
+    sCtx.lineTo(cx + ballR * 0.7, ballY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Mace Ball with 3D radial sphere gradient
+    const bGrad = sCtx.createRadialGradient(cx - ballR * 0.35, ballY - dir * ballR * 0.35, 0.5, cx, ballY, ballR);
+    bGrad.addColorStop(0.0, '#ffffff');
+    bGrad.addColorStop(0.3, lightColor);
+    bGrad.addColorStop(0.7, mainColor);
+    bGrad.addColorStop(1.0, darkColor);
+    sCtx.fillStyle = bGrad;
+    sCtx.beginPath();
+    sCtx.arc(cx, ballY, ballR, 0, Math.PI * 2);
+    sCtx.fill();
+
+    // Small metallic studs on mace ball
+    sCtx.fillStyle = '#ffffff';
+    sCtx.beginPath();
+    sCtx.arc(cx, ballY + dir * ballR, 0.8, 0, Math.PI * 2);
+    sCtx.arc(cx - ballR, ballY, 0.8, 0, Math.PI * 2);
+    sCtx.arc(cx + ballR, ballY, 0.8, 0, Math.PI * 2);
+    sCtx.fill();
+
+    // Outlines
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - ballR * 0.7, ballY);
+    sCtx.stroke();
+    sCtx.beginPath();
+    sCtx.moveTo(cx + halfW, coneBaseY);
+    sCtx.lineTo(cx + ballR * 0.7, ballY);
+    sCtx.stroke();
+    sCtx.beginPath();
+    sCtx.arc(cx, ballY, ballR, 0, Math.PI * 2);
+    sCtx.stroke();
+
+  } else if (family === 'bullet') {
+    // BULLET STUD (ratio 2.1 to 1, round tip, very glossy)
+    const midH = coneH * 0.45;
+    const midY = coneBaseY + dir * midH;
+    const domeR = halfW;
+
+    // Cylindrical lower section + rounded dome
+    const gBul = sCtx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+    gBul.addColorStop(0.0, lightColor);
+    gBul.addColorStop(0.18, '#ffffff');
+    gBul.addColorStop(0.40, mainColor);
+    gBul.addColorStop(0.70, darkColor);
+    gBul.addColorStop(1.0, adjustColor(darkColor, -0.3));
+    sCtx.fillStyle = gBul;
+
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - halfW, midY);
+    sCtx.arc(cx, midY, domeR, Math.PI, 0, isTop ? false : true);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Super glossy highlight curve
+    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    sCtx.lineWidth = Math.max(1.2, w * 0.18);
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.5, coneBaseY);
+    sCtx.lineTo(cx - halfW * 0.5, midY);
+    sCtx.quadraticCurveTo(cx - halfW * 0.4, tipY, cx - 1, tipY - dir * 1.5);
+    sCtx.stroke();
+
+    // Outline
+    sCtx.strokeStyle = outlineColor;
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx - halfW, midY);
+    sCtx.arc(cx, midY, domeR, Math.PI, 0, isTop ? false : true);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.stroke();
+
+  } else if (family === 'flame') {
+    // FLAME STUD (ratio 2.4 to 1, orange-red gradient cone with flame lick tip)
+    const gFlame = sCtx.createLinearGradient(0, coneBaseY, 0, tipY);
+    gFlame.addColorStop(0.0, '#b91c1c'); // Crimson red base
+    gFlame.addColorStop(0.5, '#f97316'); // Vibrant orange
+    gFlame.addColorStop(1.0, '#fef08a'); // Lick of yellow fire at tip
+    sCtx.fillStyle = gFlame;
+
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.quadraticCurveTo(cx - halfW * 0.1, coneBaseY + dir * coneH * 0.6, cx + 1, tipY);
+    sCtx.quadraticCurveTo(cx + halfW * 0.2, coneBaseY + dir * coneH * 0.6, cx + halfW, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Inner bright flame core
+    sCtx.fillStyle = 'rgba(254, 240, 138, 0.85)';
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW * 0.35, coneBaseY + dir * 2);
+    sCtx.lineTo(cx, tipY - dir * 1.5);
+    sCtx.lineTo(cx + halfW * 0.2, coneBaseY + dir * 2);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Outline
+    sCtx.strokeStyle = '#450a0a';
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.quadraticCurveTo(cx - halfW * 0.1, coneBaseY + dir * coneH * 0.6, cx + 1, tipY);
+    sCtx.quadraticCurveTo(cx + halfW * 0.2, coneBaseY + dir * coneH * 0.6, cx + halfW, coneBaseY);
+    sCtx.stroke();
+
+  } else {
+    // CLASSIC (ratio 2.4 to 1, smooth cone bullet stud with 3D highlight)
+    const gL = sCtx.createLinearGradient(cx - halfW, 0, cx, 0);
+    gL.addColorStop(0, lightColor);
+    gL.addColorStop(1, mainColor);
+    sCtx.fillStyle = gL;
+    sCtx.beginPath();
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    const gR = sCtx.createLinearGradient(cx, 0, cx + halfW, 0);
+    gR.addColorStop(0, mainColor);
+    gR.addColorStop(1, darkColor);
+    sCtx.fillStyle = gR;
+    sCtx.beginPath();
+    sCtx.moveTo(cx, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // Bright white highlight stripe on left (~18% of width)
     sCtx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
-    sCtx.lineWidth = 1.4;
+    sCtx.lineWidth = Math.max(1.1, w * 0.18);
     sCtx.beginPath();
-    sCtx.moveTo(cx - halfW * 0.45, baseY + dir * 3);
-    sCtx.lineTo(tipX - 0.8, tipY - dir * 2);
+    sCtx.moveTo(cx - halfW * 0.45, coneBaseY);
+    sCtx.lineTo(cx - 0.7, tipY - dir * 1.8);
     sCtx.stroke();
 
     // Exact cone outline
     sCtx.strokeStyle = outlineColor;
-    sCtx.lineWidth = 1.3;
-    sCtx.lineJoin = 'round';
+    sCtx.lineWidth = 1;
     sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + halfW, baseY);
+    sCtx.moveTo(cx - halfW, coneBaseY);
+    sCtx.lineTo(cx, tipY);
+    sCtx.lineTo(cx + halfW, coneBaseY);
     sCtx.stroke();
 
     // White specular glint at tip
     sCtx.fillStyle = '#ffffff';
     sCtx.beginPath();
-    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
-    sCtx.fill();
-  } else if (style === 'glowing blade spikes') {
-    // Style 2: Neon City - Glowing blade spikes
-    const shoulderY = baseY + dir * (h * 0.28);
-    const shW = halfW * 0.9;
-
-    const gBladeL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-    gBladeL.addColorStop(0, '#e0f2fe');
-    gBladeL.addColorStop(0.4, '#38bdf8');
-    gBladeL.addColorStop(1, '#0284c7');
-    sCtx.fillStyle = gBladeL;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(cx - shW, shoulderY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    const gBladeR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-    gBladeR.addColorStop(0, '#312e81');
-    gBladeR.addColorStop(0.5, '#1e1b4b');
-    gBladeR.addColorStop(1, '#0f172a');
-    sCtx.fillStyle = gBladeR;
-    sCtx.beginPath();
-    sCtx.moveTo(cx, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + shW, shoulderY);
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    // Glossy 3D highlight stripe
-    sCtx.strokeStyle = '#ffffff';
-    sCtx.lineWidth = 1.3;
-    sCtx.beginPath();
-    sCtx.moveTo(cx, baseY + dir * 2);
-    sCtx.lineTo(tipX, tipY - dir * 2);
-    sCtx.stroke();
-
-    // Secondary magenta neon line
-    sCtx.strokeStyle = accent2;
-    sCtx.lineWidth = 1.2;
-    sCtx.beginPath();
-    sCtx.moveTo(cx + shW, shoulderY);
-    sCtx.lineTo(tipX + 0.5, tipY - dir * 2);
-    sCtx.stroke();
-
-    // Exact blade outline
-    sCtx.strokeStyle = outlineColor;
-    sCtx.lineWidth = 1.3;
-    sCtx.lineJoin = 'round';
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(cx - shW, shoulderY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + shW, shoulderY);
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.stroke();
-
-    // White specular glint at tip
-    sCtx.fillStyle = '#ffffff';
-    sCtx.beginPath();
-    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
-    sCtx.fill();
-  } else if (style === 'ice crystal spikes') {
-    // Style 3: Frozen Peaks - Ice crystal spikes
-    const midY = baseY + dir * (h * 0.45);
-    const ridgeX = cx - halfW * 0.15;
-
-    const gIceL = sCtx.createLinearGradient(cx - halfW, baseY, ridgeX, midY);
-    gIceL.addColorStop(0, '#ffffff');
-    gIceL.addColorStop(0.5, '#e0f7fa');
-    gIceL.addColorStop(1, '#a5f3fc');
-    sCtx.fillStyle = gIceL;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(cx - halfW * 0.85, midY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(ridgeX, midY);
-    sCtx.lineTo(cx - halfW * 0.3, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    const gIceC = sCtx.createLinearGradient(ridgeX, baseY, cx, tipY);
-    gIceC.addColorStop(0, '#bae6fd');
-    gIceC.addColorStop(0.5, '#38bdf8');
-    gIceC.addColorStop(1, '#0284c7');
-    sCtx.fillStyle = gIceC;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW * 0.3, baseY);
-    sCtx.lineTo(ridgeX, midY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + halfW * 0.2, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    const gIceR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-    gIceR.addColorStop(0, '#1e3a8a');
-    gIceR.addColorStop(0.6, '#172554');
-    gIceR.addColorStop(1, '#0c1938');
-    sCtx.fillStyle = gIceR;
-    sCtx.beginPath();
-    sCtx.moveTo(cx + halfW * 0.2, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + halfW * 0.85, midY);
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    // Glossy 3D facet highlight stripe
-    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-    sCtx.lineWidth = 1.3;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW * 0.3, baseY + dir * 2);
-    sCtx.lineTo(ridgeX, midY);
-    sCtx.lineTo(tipX, tipY - dir * 1.5);
-    sCtx.stroke();
-
-    // Exact faceted outline
-    sCtx.strokeStyle = outlineColor;
-    sCtx.lineWidth = 1.3;
-    sCtx.lineJoin = 'round';
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(cx - halfW * 0.85, midY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + halfW * 0.85, midY);
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.stroke();
-
-    // White specular glint at tip
-    sCtx.fillStyle = '#ffffff';
-    sCtx.beginPath();
-    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
-    sCtx.fill();
-  } else if (style === 'black rock spikes with glowing tips') {
-    // Style 4: Volcano Wasteland - Black rock spikes with glowing tips
-    const j1X = cx - halfW * 0.7, j1Y = baseY + dir * (h * 0.35);
-    const j2X = cx + halfW * 0.8, j2Y = baseY + dir * (h * 0.55);
-
-    const gRockL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-    gRockL.addColorStop(0, '#475569');
-    gRockL.addColorStop(0.4, '#334155');
-    gRockL.addColorStop(1, '#1e293b');
-    sCtx.fillStyle = gRockL;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(j1X, j1Y);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    const gRockR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-    gRockR.addColorStop(0, '#18181b');
-    gRockR.addColorStop(0.6, '#09090b');
-    gRockR.addColorStop(1, '#000000');
-    sCtx.fillStyle = gRockR;
-    sCtx.beginPath();
-    sCtx.moveTo(cx, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(j2X, j2Y);
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    // Molten magma highlight stripe
-    sCtx.strokeStyle = '#ffedd5';
-    sCtx.lineWidth = 1.3;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - 1, baseY + dir * (h * 0.2));
-    sCtx.lineTo(cx + 1, baseY + dir * (h * 0.6));
-    sCtx.lineTo(tipX, tipY);
-    sCtx.stroke();
-
-    // Glossy specular line on left facet
-    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-    sCtx.lineWidth = 1.2;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW + 1, baseY + dir * 2);
-    sCtx.lineTo(j1X, j1Y);
-    sCtx.stroke();
-
-    // Exact jagged rock outline
-    sCtx.strokeStyle = outlineColor;
-    sCtx.lineWidth = 1.3;
-    sCtx.lineJoin = 'round';
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(j1X, j1Y);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(j2X, j2Y);
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.stroke();
-
-    // Incandescent glint at glowing tip
-    sCtx.fillStyle = '#fff7ed';
-    sCtx.beginPath();
-    sCtx.arc(tipX, tipY - dir * 1.2, 1.4, 0, Math.PI * 2);
-    sCtx.fill();
-  } else if (style === 'yellow saw-tooth and fork spikes') {
-    // Style 5: Cyber Factory - Saw-tooth (var 0) and Fork (var 1)
-    if (variant === 1) {
-      // Dual-prong fork stud
-      const stemH = h * 0.42;
-      const forkStemY = baseY + dir * stemH;
-      const prongW = halfW * 0.38;
-
-      sCtx.fillStyle = '#ca8a04';
-      sCtx.fillRect(cx - halfW, isTop ? baseY : baseY - stemH, w, stemH);
-
-      const gForkL = sCtx.createLinearGradient(cx - halfW, forkStemY, cx - halfW + prongW, tipY);
-      gForkL.addColorStop(0, '#fef08a');
-      gForkL.addColorStop(1, '#eab308');
-      sCtx.fillStyle = gForkL;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, forkStemY);
-      sCtx.lineTo(cx - halfW * 0.7, tipY);
-      sCtx.lineTo(cx - halfW + prongW, forkStemY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      const gForkR = sCtx.createLinearGradient(cx + halfW - prongW, forkStemY, cx + halfW, tipY);
-      gForkR.addColorStop(0, '#ca8a04');
-      gForkR.addColorStop(1, '#854d0e');
-      sCtx.fillStyle = gForkR;
-      sCtx.beginPath();
-      sCtx.moveTo(cx + halfW - prongW, forkStemY);
-      sCtx.lineTo(cx + halfW * 0.7, tipY);
-      sCtx.lineTo(cx + halfW, forkStemY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      // Industrial rivets on base
-      sCtx.fillStyle = '#1e293b';
-      sCtx.beginPath(); sCtx.arc(cx - halfW * 0.5, baseY + dir * (stemH * 0.5), 1.1, 0, Math.PI * 2); sCtx.fill();
-      sCtx.beginPath(); sCtx.arc(cx + halfW * 0.5, baseY + dir * (stemH * 0.5), 1.1, 0, Math.PI * 2); sCtx.fill();
-
-      // Highlight stripe on left prong
-      sCtx.strokeStyle = '#ffffff';
-      sCtx.lineWidth = 1.3;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW + 1, forkStemY);
-      sCtx.lineTo(cx - halfW * 0.7, tipY - dir * 1.5);
-      sCtx.stroke();
-
-      // Exact dual-prong fork outline
-      sCtx.strokeStyle = outlineColor;
-      sCtx.lineWidth = 1.3;
-      sCtx.lineJoin = 'round';
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, baseY);
-      sCtx.lineTo(cx - halfW, forkStemY);
-      sCtx.lineTo(cx - halfW * 0.7, tipY);
-      sCtx.lineTo(cx - halfW + prongW, forkStemY);
-      sCtx.lineTo(cx + halfW - prongW, forkStemY);
-      sCtx.lineTo(cx + halfW * 0.7, tipY);
-      sCtx.lineTo(cx + halfW, forkStemY);
-      sCtx.lineTo(cx + halfW, baseY);
-      sCtx.stroke();
-
-      // Glints on both fork prong tips
-      sCtx.fillStyle = '#ffffff';
-      sCtx.beginPath(); sCtx.arc(cx - halfW * 0.7, tipY - dir * 1.2, 1.2, 0, Math.PI * 2); sCtx.fill();
-      sCtx.beginPath(); sCtx.arc(cx + halfW * 0.7, tipY - dir * 1.2, 1.2, 0, Math.PI * 2); sCtx.fill();
-    } else {
-      // Industrial saw-tooth stud
-      const gToothL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-      gToothL.addColorStop(0, '#fef08a');
-      gToothL.addColorStop(0.5, '#facc15');
-      gToothL.addColorStop(1, '#eab308');
-      sCtx.fillStyle = gToothL;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, baseY);
-      sCtx.lineTo(tipX, tipY);
-      sCtx.lineTo(cx + 1, baseY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      const gToothR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-      gToothR.addColorStop(0, '#a16207');
-      gToothR.addColorStop(0.6, '#854d0e');
-      gToothR.addColorStop(1, '#451a03');
-      sCtx.fillStyle = gToothR;
-      sCtx.beginPath();
-      sCtx.moveTo(cx + 1, baseY);
-      sCtx.lineTo(tipX, tipY);
-      sCtx.lineTo(cx + halfW, baseY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      // Mechanical cutout notch
-      sCtx.fillStyle = '#0f172a';
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW + 2, baseY + dir * 3);
-      sCtx.lineTo(cx - halfW + 6, baseY + dir * 3);
-      sCtx.lineTo(cx - halfW + 4, baseY + dir * 6);
-      sCtx.closePath();
-      sCtx.fill();
-
-      // Glossy highlight stripe
-      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-      sCtx.lineWidth = 1.3;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW * 0.4, baseY + dir * 4);
-      sCtx.lineTo(tipX - 0.8, tipY - dir * 2);
-      sCtx.stroke();
-
-      // Exact saw-tooth outline
-      sCtx.strokeStyle = outlineColor;
-      sCtx.lineWidth = 1.3;
-      sCtx.lineJoin = 'round';
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, baseY);
-      sCtx.lineTo(tipX, tipY);
-      sCtx.lineTo(cx + halfW, baseY);
-      sCtx.stroke();
-
-      // White specular glint at tip
-      sCtx.fillStyle = '#ffffff';
-      sCtx.beginPath();
-      sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
-      sCtx.fill();
-    }
-  } else if (style === 'thorn and claw spikes') {
-    // Style 6: Alien Jungle - Thorn (violet, var 0) and Claw (emerald, var 1)
-    if (variant === 1) {
-      // Emerald claw
-      const curveX = cx - halfW * 0.45;
-      const curveY = baseY + dir * (h * 0.5);
-
-      const gClawL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-      gClawL.addColorStop(0, '#bbf7d0');
-      gClawL.addColorStop(0.4, '#4ade80');
-      gClawL.addColorStop(1, '#16a34a');
-      sCtx.fillStyle = gClawL;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, baseY);
-      sCtx.quadraticCurveTo(curveX - 2, curveY, tipX, tipY);
-      sCtx.lineTo(cx, baseY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      const gClawR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-      gClawR.addColorStop(0, '#15803d');
-      gClawR.addColorStop(0.6, '#14532d');
-      gClawR.addColorStop(1, '#052e16');
-      sCtx.fillStyle = gClawR;
-      sCtx.beginPath();
-      sCtx.moveTo(cx, baseY);
-      sCtx.lineTo(tipX, tipY);
-      sCtx.quadraticCurveTo(curveX + halfW * 0.8, curveY, cx + halfW, baseY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      // Glossy highlight curve
-      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-      sCtx.lineWidth = 1.3;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW + 1, baseY + dir * 3);
-      sCtx.quadraticCurveTo(curveX, curveY, tipX - 0.5, tipY - dir * 2);
-      sCtx.stroke();
-
-      // Exact claw outline
-      sCtx.strokeStyle = outlineColor;
-      sCtx.lineWidth = 1.3;
-      sCtx.lineJoin = 'round';
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, baseY);
-      sCtx.quadraticCurveTo(curveX - 2, curveY, tipX, tipY);
-      sCtx.quadraticCurveTo(curveX + halfW * 0.8, curveY, cx + halfW, baseY);
-      sCtx.stroke();
-
-      // White specular glint at tip
-      sCtx.fillStyle = '#ffffff';
-      sCtx.beginPath();
-      sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
-      sCtx.fill();
-    } else {
-      // Violet thorn
-      const curveX = cx + halfW * 0.4;
-      const curveY = baseY + dir * (h * 0.48);
-
-      const gThornL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-      gThornL.addColorStop(0, '#f3e8ff');
-      gThornL.addColorStop(0.4, '#c084fc');
-      gThornL.addColorStop(1, '#9333ea');
-      sCtx.fillStyle = gThornL;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, baseY);
-      sCtx.quadraticCurveTo(curveX - halfW * 0.8, curveY, tipX, tipY);
-      sCtx.lineTo(cx, baseY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      const gThornR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-      gThornR.addColorStop(0, '#6b21a8');
-      gThornR.addColorStop(0.6, '#581c87');
-      gThornR.addColorStop(1, '#2e1065');
-      sCtx.fillStyle = gThornR;
-      sCtx.beginPath();
-      sCtx.moveTo(cx, baseY);
-      sCtx.lineTo(tipX, tipY);
-      sCtx.quadraticCurveTo(curveX + 2, curveY, cx + halfW, baseY);
-      sCtx.closePath();
-      sCtx.fill();
-
-      // Glossy highlight curve
-      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      sCtx.lineWidth = 1.3;
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW * 0.4, baseY + dir * 3);
-      sCtx.quadraticCurveTo(curveX - halfW * 0.5, curveY, tipX - 0.8, tipY - dir * 2);
-      sCtx.stroke();
-
-      // Exact thorn outline
-      sCtx.strokeStyle = outlineColor;
-      sCtx.lineWidth = 1.3;
-      sCtx.lineJoin = 'round';
-      sCtx.beginPath();
-      sCtx.moveTo(cx - halfW, baseY);
-      sCtx.quadraticCurveTo(curveX - halfW * 0.8, curveY, tipX, tipY);
-      sCtx.quadraticCurveTo(curveX + 2, curveY, cx + halfW, baseY);
-      sCtx.stroke();
-
-      // White specular glint at tip
-      sCtx.fillStyle = '#ffffff';
-      sCtx.beginPath();
-      sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
-      sCtx.fill();
-    }
-  } else if (style === 'coral spikes') {
-    // Style 7: Deep Ocean Ruins - Coral spikes
-    const flute1Y = baseY + dir * (h * 0.35);
-    const flute2Y = baseY + dir * (h * 0.7);
-
-    const gCoralL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-    gCoralL.addColorStop(0, '#ccfbf1');
-    gCoralL.addColorStop(0.4, '#5eead4');
-    gCoralL.addColorStop(1, '#14b8a6');
-    sCtx.fillStyle = gCoralL;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.bezierCurveTo(cx - halfW * 0.8, flute1Y, cx - halfW * 0.4, flute2Y, tipX, tipY);
-    sCtx.lineTo(cx, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    const gCoralR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-    gCoralR.addColorStop(0, '#0f766e');
-    gCoralR.addColorStop(0.6, '#042f2e');
-    gCoralR.addColorStop(1, '#021a1a');
-    sCtx.fillStyle = gCoralR;
-    sCtx.beginPath();
-    sCtx.moveTo(cx, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.bezierCurveTo(cx + halfW * 0.4, flute2Y, cx + halfW * 0.8, flute1Y, cx + halfW, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    // Bioluminescent polyps
-    sCtx.fillStyle = '#a7f3d0';
-    sCtx.beginPath(); sCtx.arc(cx - halfW * 0.45, flute1Y, 1.2, 0, Math.PI * 2); sCtx.fill();
-    sCtx.beginPath(); sCtx.arc(cx - halfW * 0.25, flute2Y, 1.1, 0, Math.PI * 2); sCtx.fill();
-    sCtx.fillStyle = '#115e59';
-    sCtx.beginPath(); sCtx.arc(cx + halfW * 0.45, flute1Y, 1.2, 0, Math.PI * 2); sCtx.fill();
-
-    // Glossy highlight stripe
-    sCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    sCtx.lineWidth = 1.3;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW * 0.35, baseY + dir * 3);
-    sCtx.lineTo(tipX - 0.8, tipY - dir * 2);
-    sCtx.stroke();
-
-    // Exact fluted coral outline
-    sCtx.strokeStyle = outlineColor;
-    sCtx.lineWidth = 1.3;
-    sCtx.lineJoin = 'round';
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.bezierCurveTo(cx - halfW * 0.8, flute1Y, cx - halfW * 0.4, flute2Y, tipX, tipY);
-    sCtx.bezierCurveTo(cx + halfW * 0.4, flute2Y, cx + halfW * 0.8, flute1Y, cx + halfW, baseY);
-    sCtx.stroke();
-
-    // White specular glint at tip
-    sCtx.fillStyle = '#ffffff';
-    sCtx.beginPath();
-    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
-    sCtx.fill();
-  } else if (style === 'energy crystal spikes') {
-    // Style 8: Space Station - Energy crystal spikes
-    const gEnergyL = sCtx.createLinearGradient(cx - halfW, baseY, cx, tipY);
-    gEnergyL.addColorStop(0, '#f5d0fe');
-    gEnergyL.addColorStop(0.4, '#c084fc');
-    gEnergyL.addColorStop(1, '#9333ea');
-    sCtx.fillStyle = gEnergyL;
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(cx - halfW * 0.6, baseY + dir * (h * 0.4));
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    const gEnergyR = sCtx.createLinearGradient(cx, baseY, cx + halfW, tipY);
-    gEnergyR.addColorStop(0, '#4a044e');
-    gEnergyR.addColorStop(0.6, '#2e1065');
-    gEnergyR.addColorStop(1, '#090514');
-    sCtx.fillStyle = gEnergyR;
-    sCtx.beginPath();
-    sCtx.moveTo(cx, baseY);
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + halfW * 0.6, baseY + dir * (h * 0.4));
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.closePath();
-    sCtx.fill();
-
-    // Base emitter collar
-    sCtx.fillStyle = '#1e1b4b';
-    sCtx.fillRect(cx - (w + 2) / 2, isTop ? baseY : baseY - 3, w + 2, 3);
-    sCtx.fillStyle = accent;
-    sCtx.fillRect(cx - 2, isTop ? baseY + 1 : baseY - 2, 4, 1.5);
-
-    // Glowing energy facet line
-    sCtx.strokeStyle = '#ffffff';
-    sCtx.lineWidth = 1.3;
-    sCtx.beginPath();
-    sCtx.moveTo(cx, baseY + dir * 4);
-    sCtx.lineTo(tipX, tipY - dir * 1.5);
-    sCtx.stroke();
-
-    // Exact crystal outline
-    sCtx.strokeStyle = outlineColor;
-    sCtx.lineWidth = 1.3;
-    sCtx.lineJoin = 'round';
-    sCtx.beginPath();
-    sCtx.moveTo(cx - halfW, baseY);
-    sCtx.lineTo(cx - halfW * 0.6, baseY + dir * (h * 0.4));
-    sCtx.lineTo(tipX, tipY);
-    sCtx.lineTo(cx + halfW * 0.6, baseY + dir * (h * 0.4));
-    sCtx.lineTo(cx + halfW, baseY);
-    sCtx.stroke();
-
-    // White specular glint at tip
-    sCtx.fillStyle = '#ffffff';
-    sCtx.beginPath();
-    sCtx.arc(tipX, tipY - dir * 1.2, 1.3, 0, Math.PI * 2);
+    sCtx.arc(cx - 0.4, tipY - dir * 1.2, 1.2, 0, Math.PI * 2);
     sCtx.fill();
   }
 
@@ -2367,43 +2941,39 @@ function drawFluffyClouds(pCtx, x, y, scale = 1, alpha = 0.85, tint = '#ffffff')
   pCtx.restore();
 }
 
-// Pre-render spike sprites once per stage and reuse them (Requirement 4 & 5)
 function prerenderAllStageSpikes() {
-  stageSpikeCanvases.length = 0;
-  const sizes = { small: 12, medium: 22, big: 36 };
+  prerenderSpikes(curConfig);
+}
 
-  for (let sIdx = 0; sIdx < STAGES.length; sIdx++) {
-    const stage = STAGES[sIdx];
-    const stageMap = {};
-    const hasVariants = (sIdx === 4 || sIdx === 5);
-    const variants = hasVariants ? [0, 1] : [0];
+function prerenderSpikes(cfg) {
+  spikeCanvases = {};
+  if (!cfg) return;
 
-    for (const sKey in sizes) {
-      const h = sizes[sKey];
-      for (const dir of ['top', 'bot']) {
-        for (const v of variants) {
-          const key = hasVariants ? `${sKey}_${dir}_${v}` : `${sKey}_${dir}`;
+  const families = (cfg.families && cfg.families.length > 0) ? cfg.families : ['classic'];
+  const colors = (cfg.colors && cfg.colors.length > 0) ? cfg.colors : [{
+    main: '#d1d5db', light: '#f1f5f9', dark: '#64748b', accent: '#ff8a1f', glow: '#ff8a1f'
+  }];
+  const sizes = { small: SPIKE_H_SMALL, medium: SPIKE_H_MEDIUM, big: SPIKE_H_BIG };
+
+  for (const fam of families) {
+    for (let cIdx = 0; cIdx < colors.length; cIdx++) {
+      const col = colors[cIdx];
+      for (const sKey in sizes) {
+        const h = sizes[sKey];
+        for (const dir of ['top', 'bot']) {
           const canvas = document.createElement('canvas');
-          canvas.width = 40;
-          canvas.height = 52;
-          renderStageSpike(canvas, dir === 'top', h, stage, v);
-          stageMap[key] = canvas;
-          if (hasVariants && v === 0) {
-            stageMap[`${sKey}_${dir}`] = canvas;
+          canvas.width = 54;
+          canvas.height = 64;
+          renderStageStud(canvas, dir === 'top', h, fam, col);
+          const key = `${fam}_${cIdx}_${dir}_${sKey}`;
+          spikeCanvases[key] = canvas;
+          if (cIdx === 0 && fam === families[0]) {
+            spikeCanvases[`${sKey}_${dir}`] = canvas;
           }
         }
       }
     }
-    stageSpikeCanvases.push(stageMap);
   }
-}
-
-function prerenderSpikes(cfg) {
-  if (!stageSpikeCanvases || stageSpikeCanvases.length === 0) {
-    prerenderAllStageSpikes();
-  }
-  const stageIdx = (getStageNumber(curLevel) - 1) % STAGES.length;
-  spikeCanvases = stageSpikeCanvases[stageIdx] || {};
 }
 
 // ==========================================
@@ -3499,20 +4069,48 @@ function getCorridorSafeBounds(x, segsList) {
     const s = segsList[i];
     if (x >= s.x && x <= s.x + s.w) {
       if (s.isOpen) {
+        if (s.obstacles && s.obstacles.length > 0) {
+          for (const obs of s.obstacles) {
+            if (Math.abs(x - (obs.x + obs.w / 2)) < obs.w + 30) {
+              if (obs.type === 'gate') {
+                const sTop = obs.gapTop + 16;
+                const sBot = obs.gapBot - 16;
+                return { top: obs.gapTop, bot: obs.gapBot, safeTop: sTop, safeBot: sBot, safeCenter: obs.gateCenter, halfH: Math.max(12, (sBot - sTop) / 2) };
+              } else if (obs.type === 'stalactite') {
+                const sTop = obs.tipY + 18;
+                const sBot = H - 90;
+                return { top: obs.tipY, bot: H - 70, safeTop: sTop, safeBot: sBot, safeCenter: (sTop + sBot) / 2, halfH: Math.max(12, (sBot - sTop) / 2) };
+              } else if (obs.type === 'stalagmite') {
+                const sTop = 90;
+                const sBot = obs.tipY - 18;
+                return { top: 70, bot: obs.tipY, safeTop: sTop, safeBot: sBot, safeCenter: (sTop + sBot) / 2, halfH: Math.max(12, (sBot - sTop) / 2) };
+              } else if (obs.type === 'floating_block') {
+                const sTop = 80;
+                const sBot = obs.y - 18;
+                return { top: 60, bot: obs.y, safeTop: sTop, safeBot: sBot, safeCenter: (sTop + sBot) / 2, halfH: Math.max(12, (sBot - sTop) / 2) };
+              }
+            }
+          }
+        }
+        const sCenter = s.safeCenter || (CAR_REST_Y - 40);
         return {
           top: -300,
           bot: H + 300,
-          safeTop: 120,
-          safeBot: H - 120,
-          safeCenter: CAR_REST_Y - 40,
-          halfH: 100
+          safeTop: sCenter - 80,
+          safeBot: sCenter + 80,
+          safeCenter: sCenter,
+          halfH: 80
         };
       }
       let curTop = (s.curTop !== undefined) ? s.curTop : s.top;
       let curBot = (s.curBot !== undefined) ? s.curBot : s.bot;
 
-      // Smooth step interpolation near segment boundary
-      if (i < segsList.length - 1) {
+      if (s.isSlanted && s.top2 !== undefined) {
+        const t = Math.max(0, Math.min(1, (x - s.x) / s.w));
+        curTop = curTop + (s.top2 - curTop) * t;
+        curBot = curBot + (s.bot2 - curBot) * t;
+      } else if (i < segsList.length - 1) {
+        // Smooth step interpolation near segment boundary
         const sNext = segsList[i + 1];
         if (!sNext.isOpen) {
           const seamX = s.x + s.w;
@@ -4359,15 +4957,16 @@ function scrollSpeed(difficultyDistance = getDifficultyDistance()) {
   const mult = getSpeedMultiplier();
   const startingSpeed = W * BASE_SCROLL_SPEED_RATIO * mult;
   const diffMultiplier = Math.min(1.4, 1 + SCROLL_SPEED_GROWTH * f);
-  return startingSpeed * diffMultiplier * SPEED_MULTIPLIER;
+  const boostMult = (typeof boostTimer !== 'undefined' && boostTimer > 0) ? 1.25 : 1.0;
+  return startingSpeed * diffMultiplier * SPEED_MULTIPLIER * boostMult;
 }
 const speed = scrollSpeed;
 
-// Gap height = lerp(GAP_LEVEL_1_RATIO, GAP_MAX_DIFFICULTY_RATIO, f) * carH
+// Gap height = lerp(GAP_LEVEL_1_RATIO, GAP_MAX_DIFFICULTY_RATIO, f) * carVis
 function getGapHeight(lvl, p = 0) {
   const { f } = getLevelDifficulty(lvl, p);
   const gapRatio = lerp(GAP_LEVEL_1_RATIO, GAP_MAX_DIFFICULTY_RATIO, f);
-  return Math.max(GAP_MAX_DIFFICULTY_RATIO * CAR_HITBOX_H, gapRatio * CAR_HITBOX_H);
+  return Math.max(GAP_MAX_DIFFICULTY_RATIO * carVis, gapRatio * carVis);
 }
 
 function showToast(msg) {
@@ -4401,11 +5000,15 @@ function pickClusterSize(lvl, levelRng) {
 // - Stage 4+: mixed spike heights kept (35%)
 function makeSpikes(len, lvl, top, bot, noSpikes = false, levelRng) {
   const count = Math.ceil(len / 12);
-  const heights = { small: 12, medium: 22, big: 36 };
+  const heights = { small: SPIKE_H_SMALL, medium: SPIKE_H_MEDIUM, big: SPIKE_H_BIG };
   const L = lvl || curLevel;
+  const cfg = (typeof getLevelConfig === 'function') ? getLevelConfig(L) : null;
   const stage = getStageNumber(L);
   const allowMixed = (stage >= 3);
   const mixedProbability = (stage === 3) ? 0.20 : 0.35;
+  const families = (cfg && cfg.families && cfg.families.length > 0) ? cfg.families : ['classic'];
+  const isTwoColor = cfg ? cfg.isTwoColor : false;
+  const groupSize = (cfg && cfg.groupSize) ? cfg.groupSize : 4;
 
   function gen(isTop) {
     const list = [];
@@ -4414,6 +5017,7 @@ function makeSpikes(len, lvl, top, bot, noSpikes = false, levelRng) {
       const cLen = Math.min(count - i, Math.floor(2 + levelRng() * 4));
       const baseSize = pickClusterSize(L, levelRng);
       const isMixed = allowMixed && (levelRng() < mixedProbability);
+      const fam = families[Math.floor(levelRng() * families.length)];
 
       for (let k = 0; k < cLen; k++) {
         let size = baseSize;
@@ -4421,7 +5025,9 @@ function makeSpikes(len, lvl, top, bot, noSpikes = false, levelRng) {
           size = (baseSize === 'big') ? 'medium' : 'small';
         }
         const h = noSpikes ? 0 : heights[size];
-        list.push({ h, size });
+        const spikeFam = fam;
+        const colorIdx = isTwoColor ? (Math.floor((i + k) / groupSize) % 2) : 0;
+        list.push({ h, size, family: spikeFam, colorIdx });
       }
       i += cLen;
     }
@@ -4433,11 +5039,11 @@ function makeSpikes(len, lvl, top, bot, noSpikes = false, levelRng) {
   for (let i = 0; i < count; i++) {
     if (topSpikes[i].h + botSpikes[i].h > maxSpikeSum) {
       if (topSpikes[i].h >= botSpikes[i].h) {
-        if (22 + botSpikes[i].h <= maxSpikeSum) { topSpikes[i].h = 22; topSpikes[i].size = 'medium'; }
-        else { topSpikes[i].h = 12; topSpikes[i].size = 'small'; }
+        if (SPIKE_H_MEDIUM + botSpikes[i].h <= maxSpikeSum) { topSpikes[i].h = SPIKE_H_MEDIUM; topSpikes[i].size = 'medium'; }
+        else { topSpikes[i].h = SPIKE_H_SMALL; topSpikes[i].size = 'small'; }
       } else {
-        if (topSpikes[i].h + 22 <= maxSpikeSum) { botSpikes[i].h = 22; botSpikes[i].size = 'medium'; }
-        else { botSpikes[i].h = 12; botSpikes[i].size = 'small'; }
+        if (topSpikes[i].h + SPIKE_H_MEDIUM <= maxSpikeSum) { botSpikes[i].h = SPIKE_H_MEDIUM; botSpikes[i].size = 'medium'; }
+        else { botSpikes[i].h = SPIKE_H_SMALL; botSpikes[i].size = 'small'; }
       }
     }
   }
@@ -4493,7 +5099,7 @@ function addSeg(isOpen = false, forceLen) {
     }
   }
   if (isSqueeze) {
-    gap = Math.max(3.4 * CAR_HITBOX_H, SQUEEZE_GAP_RATIO * CAR_HITBOX_H);
+    gap = Math.max(GAP_MAX_DIFFICULTY_RATIO * CAR_HITBOX_H, SQUEEZE_GAP_RATIO * CAR_HITBOX_H);
     len = Math.max(minSegLen, Math.round(baseLen * 0.75));
   }
 
@@ -4554,28 +5160,31 @@ function addSeg(isOpen = false, forceLen) {
     }
   }
 
-  // 5. FAIR STEPS WITH REACTION TIME (Requirement 1 & 3):
+  // 5. FAIR STEPS WITH REACTION TIME:
   // - Stage 1: gentle undulations (stepRatio small) so player learns controls
   // - Stage 2+: normal stepped corridors with full dynamic range
-  const stepRatio = (stageNum === 1) ? 0.16 : lerp(STEP_MIN_RATIO, STEP_MAX_RATIO, f);
+  const stepRatio = (stageNum === 1) ? 0.25 : lerp(STEP_MIN_RATIO, STEP_MAX_RATIO, f);
   const segTime = len / currentScrollSpeed;
-  const maxUpStep = 0.4 * MAX_UP_SPEED * segTime;
-  const maxDownStep = 0.35 * MAX_DOWN_SPEED * segTime;
+  const maxUpStep = 0.5 * MAX_UP_SPEED * segTime;
+  const maxDownStep = 0.45 * MAX_DOWN_SPEED * segTime;
   const fairStep = Math.min(0.5 * gap, Math.max(maxUpStep, maxDownStep));
-  const overlapStepLimit = Math.max(8, (lastGap + gap) / 2 - 2.0 * CAR_HITBOX_H - moveAmp);
+  const overlapStepLimit = Math.max(8, (lastGap + gap) / 2 - 1.4 * CAR_HITBOX_H - moveAmp);
   const maxFairStep = Math.min(fairStep - moveAmp, overlapStepLimit);
 
-  let maxShift = isOpen ? 15 : Math.max(4, stepRatio * maxFairStep);
+  let maxShift = isOpen ? 15 : Math.max(8, stepRatio * maxFairStep);
 
-  let shiftDir = (levelPRNG() * 2 - 1);
+  // Dynamic wave motion ("اوپر نیچے رہیں"): creates exciting rollercoaster ups and downs
+  const waveCycle = 0.85;
+  const waveSin = Math.sin((segIndex * waveCycle) + (curLevel * 1.57));
+  let shiftDir = 0.75 * waveSin + 0.25 * (levelPRNG() * 2 - 1);
   if (!isOpen) {
     if (stageNum >= 2 && levelSeedTwist === 'quick_stairs') {
       shiftDir = (segIndex % 2 === 0) ? 0.85 : -0.85;
     } else if (levelSeedTwist === 'smooth_corridor' && segIndex >= 1 && segIndex <= 3) {
-      maxShift *= 0.25;
+      maxShift *= 0.35;
     }
     if (isSqueeze) {
-      maxShift *= 0.4;
+      maxShift *= 0.45;
     }
   }
 
@@ -4665,7 +5274,7 @@ function sanitizeLevelSegments(segmentList) {
   for (let i = 1; i < segmentList.length; i++) {
     const prev = segmentList[i - 1];
     const curr = segmentList[i];
-    if (prev.isOpen || curr.isOpen) continue;
+    if (prev.isOpen || curr.isOpen || prev.isSlanted || curr.isSlanted || (prev.obstacles && prev.obstacles.length) || (curr.obstacles && curr.obstacles.length)) continue;
 
     const gapA = prev.bot - prev.top;
     const gapB = curr.bot - curr.top;
@@ -4675,17 +5284,17 @@ function sanitizeLevelSegments(segmentList) {
     const ampB = curr.moving ? (curr.moveAmp || 0) : 0;
     const totalAmp = ampA + ampB;
 
-    // 1. Step limit: up steps 0.4 * MAX_UP_SPEED * segTime, down steps 0.35 * MAX_DOWN_SPEED * segTime
+    // 1. Step limit: up steps 0.5 * MAX_UP_SPEED * segTime, down steps 0.45 * MAX_DOWN_SPEED * segTime
     const segTime = lenB / currentScrollSpeed;
-    const maxUpStep = 0.4 * MAX_UP_SPEED * segTime;
-    const maxDownStep = 0.35 * MAX_DOWN_SPEED * segTime;
+    const maxUpStep = 0.5 * MAX_UP_SPEED * segTime;
+    const maxDownStep = 0.45 * MAX_DOWN_SPEED * segTime;
     const fairStep = Math.min(0.5 * gapB, Math.max(maxUpStep, maxDownStep));
 
-    // 2. Window overlap >= 2.0 * carH at ALL moments of motion:
-    // overlap(t) = (gapA + gapB)/2 - |cB(t) - cA(t)| >= 2.0 * carH
+    // 2. Window overlap >= 1.4 * carH at ALL moments of motion:
+    // overlap(t) = (gapA + gapB)/2 - |cB(t) - cA(t)| >= 1.4 * carH
     // Since worst-case center distance is |cB - cA| + totalAmp:
-    // |cB - cA| <= (gapA + gapB)/2 - 2.0 * carH - totalAmp
-    let overlapStepLimit = (gapA + gapB) / 2 - 2.0 * carH - totalAmp;
+    // |cB - cA| <= (gapA + gapB)/2 - 1.4 * carH - totalAmp
+    let overlapStepLimit = (gapA + gapB) / 2 - 1.4 * carH - totalAmp;
     let motionFairStep = fairStep - totalAmp;
 
     // If totalAmp is too large to allow safe passage, clamp moving amplitudes
@@ -4698,7 +5307,7 @@ function sanitizeLevelSegments(segmentList) {
       }
     }
     const safeTotalAmp = (prev.moving ? (prev.moveAmp || 0) : 0) + (curr.moving ? (curr.moveAmp || 0) : 0);
-    const maxAllowedStep = Math.max(6, Math.min(fairStep - safeTotalAmp, (gapA + gapB) / 2 - 2.0 * carH - safeTotalAmp));
+    const maxAllowedStep = Math.max(6, Math.min(fairStep - safeTotalAmp, (gapA + gapB) / 2 - 1.4 * carH - safeTotalAmp));
 
     const cA = (prev.top + prev.bot) / 2;
     let cB = (curr.top + curr.bot) / 2;
@@ -4717,11 +5326,11 @@ function sanitizeLevelSegments(segmentList) {
     const safeMaxC = Math.max(bandMinC, bandMaxC);
     cB = Math.max(safeMinC, Math.min(safeMaxC, cB));
 
-    // 4. Double check window overlap >= 2.0 * carH at maximum displacement
+    // 4. Double check window overlap >= 1.4 * carH at maximum displacement
     const minOverlap = Math.min(prev.bot - curAmpA, cB + gapB / 2 - curAmpB) -
                        Math.max(prev.top + curAmpA, cB - gapB / 2 + curAmpB);
-    if (minOverlap < 2.0 * carH) {
-      const neededShift = (2.0 * carH - minOverlap);
+    if (minOverlap < 1.4 * carH) {
+      const neededShift = (1.4 * carH - minOverlap);
       if (cB > cA) {
         cB = Math.max(safeMinC, cB - neededShift);
       } else {
@@ -4751,6 +5360,956 @@ function sanitizeLevelSegments(segmentList) {
   }
 }
 
+// ============================================================================
+// MODULAR LEVEL GENERATION SYSTEM (10 Distinct Modules & Recipe Engine)
+// ============================================================================
+let currentLevelModuleNames = [];
+
+function getSafeTargetForAutopilot(x, modSegs, sp) {
+  for (const s of modSegs) {
+    if (s.obstacles && s.obstacles.length > 0) {
+      let closestObs = null;
+      let minAheadDist = Infinity;
+      for (const obs of s.obstacles) {
+        const distAhead = (obs.x + (obs.w ? obs.w / 2 : 0)) - x;
+        if (distAhead >= -40 && distAhead < minAheadDist) {
+          minAheadDist = distAhead;
+          closestObs = obs;
+        }
+      }
+      if (closestObs && minAheadDist < sp * 1.5) {
+        if (closestObs.type === 'gate') {
+          return (closestObs.gapTop + closestObs.gapBot) / 2;
+        } else if (closestObs.type === 'stalactite') {
+          return Math.min(H * 0.68, closestObs.tipY + 80);
+        } else if (closestObs.type === 'stalagmite') {
+          return Math.max(H * 0.32, closestObs.tipY - 80);
+        } else if (closestObs.type === 'floating_block') {
+          if (closestObs.y > H * 0.45) return closestObs.y - 70;
+          else return closestObs.y + closestObs.h + 70;
+        } else if (closestObs.type === 'saw_blade') {
+          if (closestObs.y < H * 0.50) return Math.min(H * 0.75, closestObs.y + closestObs.radius + 50);
+          else return Math.max(H * 0.25, closestObs.y - closestObs.radius - 50);
+        } else if (closestObs.type === 'pendulum') {
+          return Math.min(H * 0.80, closestObs.anchorY + closestObs.length + 48);
+        } else if (closestObs.type === 'falling_spike') {
+          return Math.min(H * 0.78, closestObs.maxDepth + 45);
+        } else if (closestObs.type === 'laser_gate') {
+          return (closestObs.topY + closestObs.botY) / 2;
+        } else if (closestObs.type === 'boost_ring') {
+          return closestObs.y;
+        }
+      }
+    }
+  }
+  const b = getCorridorSafeBounds(x, modSegs);
+  return b.safeCenter || (H * 0.50);
+}
+
+function verifyModuleFairness(modSegs, scrollSpd) {
+  if (!modSegs || modSegs.length === 0) return true;
+  const startX = modSegs[0].x;
+  const endX = modSegs[modSegs.length - 1].x + modSegs[modSegs.length - 1].w;
+  const startBounds = getCorridorSafeBounds(startX + 10, modSegs);
+  let simY = startBounds.safeCenter || (H * 0.50);
+  let simVy = 0;
+  let simThrust = 0;
+  let simX = startX;
+  const dt = 0.016;
+  const maxSteps = Math.ceil((endX - startX) / (scrollSpd * dt)) + 60;
+  let step = 0;
+
+  while (simX < endX && step < maxSteps) {
+    step++;
+    const lookaheadX = Math.min(endX, simX + scrollSpd * 0.25);
+    const targetY = getSafeTargetForAutopilot(lookaheadX, modSegs, scrollSpd);
+
+    const simHold = (simY > targetY + 3);
+    if (simHold) {
+      simThrust = Math.min(1, simThrust + dt / THRUST_RISE_TIME);
+    } else {
+      simThrust = Math.max(0, simThrust - dt / THRUST_FALL_TIME);
+    }
+    const vertAccel = -LIFT_ACCEL * simThrust + GRAVITY * (1 - simThrust);
+    simVy += vertAccel * dt;
+    simVy *= Math.exp(-AIR_DRAG * dt);
+    simVy = Math.max(-MAX_UP_SPEED, Math.min(MAX_DOWN_SPEED, simVy));
+    simY += simVy * dt;
+    simX += scrollSpd * dt;
+
+    for (const s of modSegs) {
+      if (simX + HITBOX_HALF_W > s.x && simX - HITBOX_HALF_W < s.x + s.w) {
+        if (s.obstacles && s.obstacles.length > 0) {
+          for (const obs of s.obstacles) {
+            const obsW = obs.w || (obs.radius ? obs.radius * 2 : 24);
+            if (simX + HITBOX_HALF_W > obs.x - obsW / 2 && simX - HITBOX_HALF_W < obs.x + obsW / 2) {
+              if (obs.type === 'gate') {
+                if (simY - HITBOX_TOP_OFFSET < obs.gapTop - 4 || simY + HITBOX_BOT_OFFSET > obs.gapBot + 4) return false;
+              } else if (obs.type === 'stalactite') {
+                if (simY - HITBOX_TOP_OFFSET < obs.tipY - 4) return false;
+              } else if (obs.type === 'stalagmite') {
+                if (simY + HITBOX_BOT_OFFSET > obs.tipY + 4) return false;
+              } else if (obs.type === 'floating_block') {
+                if (simY - HITBOX_TOP_OFFSET < obs.y + obs.h - 4 && simY + HITBOX_BOT_OFFSET > obs.y + 4) return false;
+              } else if (obs.type === 'saw_blade') {
+                const d2 = (simX - obs.x) ** 2 + (simY - obs.y) ** 2;
+                if (d2 < (obs.radius * 0.9 + 10) ** 2) return false;
+              } else if (obs.type === 'pendulum') {
+                const simTime = (simX - startX) / scrollSpd;
+                const pTheta = obs.maxAngle * Math.sin(simTime * 2 * Math.PI / obs.period);
+                const bx = obs.anchorX + obs.length * Math.sin(pTheta);
+                const by = obs.anchorY + obs.length * Math.cos(pTheta);
+                const d2 = (simX - bx) ** 2 + (simY - by) ** 2;
+                if (d2 < (obs.radius * 0.9 + 10) ** 2) return false;
+              } else if (obs.type === 'laser_gate') {
+                const simTime = (obs.x - startX) / scrollSpd;
+                let t = (simTime + obs.phase) % 1.4;
+                if (t >= 0.55 && t <= 1.4) {
+                  // Guarantee steady speed passing window by synchronizing gate phase
+                  obs.phase = (0.35 - (simTime % 1.4) + 1.4) % 1.4;
+                }
+              } else if (obs.type === 'falling_spike') {
+                if (simY - HITBOX_TOP_OFFSET < obs.maxDepth - 8 && Math.abs(simX - obs.x) < 14) return false;
+              }
+            }
+          }
+        }
+        if (!s.isOpen) {
+          let curTop = s.top;
+          let curBot = s.bot;
+          if (s.isSlanted && s.top2 !== undefined && s.bot2 !== undefined) {
+            const frac = Math.max(0, Math.min(1, (simX - s.x) / s.w));
+            curTop = s.top + (s.top2 - s.top) * frac;
+            curBot = s.bot + (s.bot2 - s.bot) * frac;
+          }
+          if (simY - HITBOX_TOP_OFFSET < curTop - 14 || simY + HITBOX_BOT_OFFSET > curBot + 14) return false;
+          if (s.topSpikes && s.botSpikes) {
+            for (let i = 0; i < s.topSpikes.length; i++) {
+              const spX = s.x + i * 12;
+              if (simX + HITBOX_HALF_W > spX && simX - HITBOX_HALF_W < spX + 12) {
+                let localTop = curTop;
+                let localBot = curBot;
+                if (s.isSlanted && s.top2 !== undefined && s.bot2 !== undefined) {
+                  const spFrac = Math.max(0, Math.min(1, (spX + 6 - s.x) / s.w));
+                  localTop = curTop + (s.top2 - curTop) * spFrac;
+                  localBot = curBot + (s.bot2 - curBot) * spFrac;
+                }
+                const topTip = (localTop - 18) + s.topSpikes[i].h;
+                const botTip = (localBot + 18) - s.botSpikes[i].h;
+                if (simY - HITBOX_TOP_OFFSET < topTip - 4 || simY + HITBOX_BOT_OFFSET > botTip + 4) return false;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
+function widenModuleGaps(modSegs, factor) {
+  for (const s of modSegs) {
+    if (s.obstacles && s.obstacles.length > 0) {
+      for (const obs of s.obstacles) {
+        if (obs.type === 'gate') {
+          const c = (obs.gapTop + obs.gapBot) / 2;
+          const g = (obs.gapBot - obs.gapTop) * factor;
+          obs.gapTop = Math.max(20, c - g / 2);
+          obs.gapBot = Math.min(H - 20, c + g / 2);
+        } else if (obs.type === 'stalactite') {
+          obs.tipY = Math.max(20, obs.tipY / factor);
+        } else if (obs.type === 'stalagmite') {
+          obs.tipY = Math.min(H - 20, H - (H - obs.tipY) / factor);
+        } else if (obs.type === 'floating_block') {
+          obs.h = Math.max(24, obs.h / factor);
+        } else if (obs.type === 'saw_blade') {
+          if (obs.y < H * 0.5) obs.y = Math.max(s.top + obs.radius, obs.y - 8);
+          else obs.y = Math.min(s.bot - obs.radius, obs.y + 8);
+        } else if (obs.type === 'pendulum') {
+          obs.length = Math.max(45, obs.length * 0.92);
+        } else if (obs.type === 'falling_spike') {
+          obs.maxDepth = Math.max(s.top + 50, obs.maxDepth - 10);
+        }
+      }
+    }
+    if (!s.isOpen) {
+      const c = (s.top + s.bot) / 2;
+      const g = (s.bot - s.top) * factor;
+      s.top = c - g / 2;
+      s.bot = c + g / 2;
+      s.curTop = s.top;
+      s.curBot = s.bot;
+      if (s.isSlanted && s.top2 !== undefined && s.bot2 !== undefined) {
+        const c2 = (s.top2 + s.bot2) / 2;
+        const g2 = (s.bot2 - s.top2) * factor;
+        s.top2 = c2 - g2 / 2;
+        s.bot2 = c2 + g2 / 2;
+      }
+    }
+  }
+}
+
+// 1. Calm Cruise (diff 1, minStage 1)
+function genCalmCruiseModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const gap = Math.max(startGap, 3.8 * CAR_HITBOX_H);
+  const endC = startCenter * 0.7 + (0.50 * H) * 0.3;
+  const numSegs = 2;
+  const segW = Math.round(modLen / numSegs);
+  const segs = [];
+  let curX = startX;
+  for (let i = 0; i < numSegs; i++) {
+    const w = (i === numSegs - 1) ? (startX + modLen - curX) : segW;
+    const c = startCenter + (endC - startCenter) * ((i + 1) / numSegs);
+    const top = c - gap / 2;
+    const bot = c + gap / 2;
+    const { topSpikes, botSpikes } = makeSpikes(w, lvl, top, bot, true, prng);
+    segs.push({ x: curX, w, top, bot, curTop: top, curBot: bot, topSpikes, botSpikes, isOpen: false, moving: false });
+    curX += w;
+  }
+  return { segs, endCenter: endC, endGap: gap };
+}
+
+// 2. Stairs (diff 2, minStage 1)
+function genStairsModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const sp = scrollSpeed();
+  const gap = Math.max(3.4 * CAR_HITBOX_H, startGap);
+  const segLen = Math.max(140, Math.round(1.3 * sp));
+  const numSegs = Math.max(2, Math.round(modLen / segLen));
+  const actualLen = Math.round(modLen / numSegs);
+  const segs = [];
+  let curX = startX;
+  let curC = startCenter;
+  let dir = (prng() < 0.5 ? 1 : -1);
+  const fairStep = Math.min(0.28 * gap, 0.35 * (GRAVITY / 3.0) * actualLen / sp);
+
+  for (let i = 0; i < numSegs; i++) {
+    const w = (i === numSegs - 1) ? (startX + modLen - curX) : actualLen;
+    if (curC + dir * fairStep < 0.38 * H) dir = 1;
+    else if (curC + dir * fairStep > 0.62 * H) dir = -1;
+    curC += dir * fairStep;
+    const top = curC - gap / 2;
+    const bot = curC + gap / 2;
+    const { topSpikes, botSpikes } = makeSpikes(w, lvl, top, bot, false, prng);
+    segs.push({ x: curX, w, top, bot, curTop: top, curBot: bot, topSpikes, botSpikes, isOpen: false, moving: false });
+    curX += w;
+  }
+  return { segs, endCenter: curC, endGap: gap };
+}
+
+// 3. Sine Wave (diff 2, minStage 1)
+function genSineWaveModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const sp = scrollSpeed();
+  const gap = Math.max(3.8 * CAR_HITBOX_H, startGap);
+  const periodSec = 2.4;
+  const lambda = periodSec * sp;
+  const amp = 24;
+  const pieceLen = 32;
+  const numPieces = Math.max(4, Math.round(modLen / pieceLen));
+  const actualPieceLen = modLen / numPieces;
+  const segs = [];
+  let curX = startX;
+  const baseC = 0.50 * H;
+
+  for (let i = 0; i < numPieces; i++) {
+    const w = (i === numPieces - 1) ? (startX + modLen - curX) : Math.round(actualPieceLen);
+    const p1 = (i / numPieces) * (2 * Math.PI * (modLen / lambda));
+    const p2 = ((i + 1) / numPieces) * (2 * Math.PI * (modLen / lambda));
+    const y1 = (i === 0) ? startCenter : (baseC + amp * Math.sin(p1));
+    const y2 = baseC + amp * Math.sin(p2);
+    const top1 = y1 - gap / 2;
+    const bot1 = y1 + gap / 2;
+    const top2 = y2 - gap / 2;
+    const bot2 = y2 + gap / 2;
+    const slope = (y2 - y1) / w;
+    const { topSpikes, botSpikes } = makeSpikes(w, lvl, top1, bot1, false, prng);
+    segs.push({
+      x: curX, w, top: top1, bot: bot1, curTop: top1, curBot: bot1,
+      top2, bot2, isSlanted: true, slope, topSpikes, botSpikes, isOpen: false, moving: false
+    });
+    curX += w;
+  }
+  return { segs, endCenter: baseC, endGap: gap };
+}
+
+// 4. Ramps (diff 3, minStage 3)
+function genRampsModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const gap = Math.max(3.5 * CAR_HITBOX_H, startGap);
+  const numRamps = 2;
+  const rampLen = Math.round(modLen / numRamps);
+  const segs = [];
+  let curX = startX;
+  let curC = startCenter;
+  let dir = (startCenter > 0.50 * H ? -1 : 1);
+  const maxSlope = 0.16; // approx 9 degrees, well within 18 deg max
+
+  for (let i = 0; i < numRamps; i++) {
+    const w = (i === numRamps - 1) ? (startX + modLen - curX) : rampLen;
+    const deltaY = dir * maxSlope * w;
+    const endC = curC + deltaY;
+    const slope = (endC - curC) / w;
+    const top1 = curC - gap / 2;
+    const bot1 = curC + gap / 2;
+    const top2 = endC - gap / 2;
+    const bot2 = endC + gap / 2;
+    const { topSpikes, botSpikes } = makeSpikes(w, lvl, top1, bot1, false, prng);
+    segs.push({
+      x: curX, w, top: top1, bot: bot1, curTop: top1, curBot: bot1,
+      top2, bot2, isSlanted: true, slope, topSpikes, botSpikes, isOpen: false, moving: false
+    });
+    curX += w;
+    curC = endC;
+    dir = -dir;
+  }
+  return { segs, endCenter: curC, endGap: gap };
+}
+
+// 5. Funnel (diff 3, minStage 2)
+function genFunnelModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const minG = Math.max(3.4 * CAR_HITBOX_H, 138);
+  const wideG = Math.max(minG + 36, startGap);
+  const c = startCenter;
+  const w1 = Math.round(modLen * 0.35);
+  const w2 = Math.round(modLen * 0.30);
+  const w3 = modLen - w1 - w2;
+  const segs = [];
+
+  // 1. Narrowing
+  segs.push({
+    x: startX, w: w1, top: c - wideG / 2, bot: c + wideG / 2, curTop: c - wideG / 2, curBot: c + wideG / 2,
+    top2: c - minG / 2, bot2: c + minG / 2, isSlanted: true, slope: (minG - wideG) / (2 * w1),
+    topSpikes: makeSpikes(w1, lvl, c - wideG / 2, c + wideG / 2, false, prng).topSpikes,
+    botSpikes: makeSpikes(w1, lvl, c - wideG / 2, c + wideG / 2, false, prng).botSpikes,
+    isOpen: false, moving: false
+  });
+  // 2. Neck
+  segs.push({
+    x: startX + w1, w: w2, top: c - minG / 2, bot: c + minG / 2, curTop: c - minG / 2, curBot: c + minG / 2,
+    topSpikes: makeSpikes(w2, lvl, c - minG / 2, c + minG / 2, true, prng).topSpikes,
+    botSpikes: makeSpikes(w2, lvl, c - minG / 2, c + minG / 2, true, prng).botSpikes,
+    isOpen: false, moving: false
+  });
+  // 3. Opening
+  segs.push({
+    x: startX + w1 + w2, w: w3, top: c - minG / 2, bot: c + minG / 2, curTop: c - minG / 2, curBot: c + minG / 2,
+    top2: c - wideG / 2, bot2: c + wideG / 2, isSlanted: true, slope: (wideG - minG) / (2 * w3),
+    topSpikes: makeSpikes(w3, lvl, c - minG / 2, c + minG / 2, false, prng).topSpikes,
+    botSpikes: makeSpikes(w3, lvl, c - minG / 2, c + minG / 2, false, prng).botSpikes,
+    isOpen: false, moving: false
+  });
+
+  return { segs, endCenter: c, endGap: wideG };
+}
+
+// 6. Gates (diff 3, minStage 3)
+function genGatesModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const sp = scrollSpeed();
+  const spacing = 1.25 * sp;
+  const numGates = Math.min(5, Math.max(3, Math.floor(modLen / spacing)));
+  const actualSpacing = modLen / (numGates + 1);
+  const gateW = 36;
+  const gateGap = Math.max(4.2 * CAR_HITBOX_H, 168);
+  const obstacles = [];
+  const baseC = 0.50 * H;
+  const offsets = [-20, 20, -16, 16, 0];
+
+  for (let k = 0; k < numGates; k++) {
+    const gx = startX + (k + 1) * actualSpacing - gateW / 2;
+    const gc = baseC + offsets[k % offsets.length];
+    obstacles.push({
+      type: 'gate',
+      x: gx,
+      w: gateW,
+      gapTop: gc - gateGap / 2,
+      gapBot: gc + gateGap / 2
+    });
+  }
+
+  const segs = [{
+    x: startX, w: modLen, top: -300, bot: H + 300, curTop: -300, curBot: H + 300,
+    topSpikes: [], botSpikes: [], isOpen: true, moving: false, obstacles
+  }];
+  return { segs, endCenter: baseC, endGap: gateGap };
+}
+
+// 7. Slalom (diff 4, minStage 4)
+function genSlalomModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const sp = scrollSpeed();
+  const spacing = 1.2 * sp;
+  const numTeeth = Math.max(3, Math.floor(modLen / spacing));
+  const actualSpacing = modLen / (numTeeth + 1);
+  const toothW = 36;
+  const obstacles = [];
+
+  for (let k = 0; k < numTeeth; k++) {
+    const ox = startX + (k + 1) * actualSpacing - toothW / 2;
+    if (k % 2 === 0) {
+      obstacles.push({
+        type: 'stalactite',
+        x: ox,
+        w: toothW,
+        tipY: 0.38 * H
+      });
+    } else {
+      obstacles.push({
+        type: 'stalagmite',
+        x: ox,
+        w: toothW,
+        tipY: 0.62 * H
+      });
+    }
+  }
+
+  const segs = [{
+    x: startX, w: modLen, top: -300, bot: H + 300, curTop: -300, curBot: H + 300,
+    topSpikes: [], botSpikes: [], isOpen: true, moving: false, obstacles
+  }];
+  return { segs, endCenter: 0.50 * H, endGap: 160 };
+}
+
+// 8. Floating Spike Islands (diff 4, minStage 5)
+function genFloatingIslandsModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const numBlocks = 2;
+  const spacing = modLen / (numBlocks + 1);
+  const obstacles = [];
+
+  for (let k = 0; k < numBlocks; k++) {
+    const bx = startX + (k + 1) * spacing - 35;
+    const bw = 70;
+    const bh = 44;
+    const by = (k % 2 === 0) ? (0.32 * H) : (0.58 * H);
+    obstacles.push({
+      type: 'floating_block',
+      x: bx,
+      y: by,
+      w: bw,
+      h: bh
+    });
+  }
+
+  const segs = [{
+    x: startX, w: modLen, top: -300, bot: H + 300, curTop: -300, curBot: H + 300,
+    topSpikes: [], botSpikes: [], isOpen: true, moving: false, obstacles
+  }];
+  return { segs, endCenter: 0.50 * H, endGap: 160 };
+}
+
+// 9. Wide Cavern (diff 2, minStage 1)
+function genWideCavernModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const gap = 0.70 * H;
+  const c = 0.49 * H;
+  const top = c - gap / 2;
+  const bot = c + gap / 2;
+  const { topSpikes, botSpikes } = makeSpikes(modLen, lvl, top, bot, true, prng);
+  const segs = [{
+    x: startX, w: modLen, top, bot, curTop: top, curBot: bot,
+    topSpikes, botSpikes, isOpen: false, moving: false
+  }];
+  return { segs, endCenter: c, endGap: gap };
+}
+
+// 10. Comb (diff 3, minStage 2)
+function genCombModule(startX, modLen, startCenter, startGap, lvl, prng) {
+  const gap = Math.max(3.5 * CAR_HITBOX_H, 140);
+  const c = startCenter;
+  const top = c - gap / 2;
+  const bot = c + gap / 2;
+  const numSpikes = Math.max(1, Math.floor(modLen / 12));
+  const topSpikes = [];
+  const botSpikes = [];
+  const pattern = ['tall_short', 'wave', 'crown', 'ramp'][Math.floor(prng() * 4)];
+
+  for (let i = 0; i < numSpikes; i++) {
+    let hTop = 14;
+    let hBot = 14;
+    if (pattern === 'tall_short') {
+      hTop = (i % 2 === 0) ? 22 : 12;
+      hBot = (i % 2 === 0) ? 12 : 22;
+    } else if (pattern === 'wave') {
+      hTop = Math.round(14 + 6 * Math.sin(i * 0.45));
+      hBot = Math.round(14 + 6 * Math.cos(i * 0.45));
+    } else if (pattern === 'crown') {
+      const mid = numSpikes / 2;
+      const dist = Math.abs(i - mid) / mid;
+      hTop = Math.round(12 + 10 * (1 - dist));
+      hBot = 12;
+    } else if (pattern === 'ramp') {
+      hTop = Math.round(10 + 12 * (i / numSpikes));
+      hBot = 12;
+    }
+    topSpikes.push({ h: hTop, size: (hTop > 16 ? 'medium' : 'small') });
+    botSpikes.push({ h: hBot, size: (hBot > 16 ? 'medium' : 'small') });
+  }
+
+  const segs = [{
+    x: startX, w: modLen, top, bot, curTop: top, curBot: bot,
+    topSpikes, botSpikes, isOpen: false, moving: false
+  }];
+  return { segs, endCenter: c, endGap: gap };
+}
+
+const MODULE_DEFS = {
+  calm_cruise:      { id: 'calm_cruise',      name: 'Calm Cruise',           diff: 1, minStage: 1, gen: genCalmCruiseModule },
+  stairs:           { id: 'stairs',           name: 'Stairs',                diff: 2, minStage: 1, gen: genStairsModule },
+  sine_wave:        { id: 'sine_wave',        name: 'Sine Wave',             diff: 2, minStage: 1, gen: genSineWaveModule },
+  ramps:            { id: 'ramps',            name: 'Ramps',                 diff: 3, minStage: 3, gen: genRampsModule },
+  funnel:           { id: 'funnel',           name: 'Funnel',                diff: 3, minStage: 2, gen: genFunnelModule },
+  gates:            { id: 'gates',            name: 'Gates',                 diff: 3, minStage: 3, gen: genGatesModule },
+  slalom:           { id: 'slalom',           name: 'Slalom',                diff: 4, minStage: 4, gen: genSlalomModule },
+  floating_islands: { id: 'floating_islands', name: 'Floating Spike Islands',diff: 4, minStage: 5, gen: genFloatingIslandsModule },
+  wide_cavern:      { id: 'wide_cavern',      name: 'Wide Cavern',           diff: 2, minStage: 1, gen: genWideCavernModule },
+  comb:             { id: 'comb',             name: 'Comb',                  diff: 3, minStage: 2, gen: genCombModule }
+};
+
+function getAvailableModules(stage) {
+  return Object.values(MODULE_DEFS).filter(m => stage >= m.minStage);
+}
+
+function generateLevelPlanRaw(lvl, salt = 0) {
+  const stage = getStageNumber(lvl);
+  const prng = mulberry32(hashInt(lvl * 99991 + salt * 17389 + 12345));
+  const available = getAvailableModules(stage);
+  const numModules = 8 + Math.floor(prng() * 5); // 8 to 12
+  const plan = [];
+
+  function targetDiffAt(idx, total) {
+    const peakIdx = Math.round(total * 0.70);
+    if (idx === 0) return 1.0;
+    if (idx === total - 2) return 1.5; // reward module
+    if (idx === total - 1) return 2.0; // gentle exit
+    if (idx <= peakIdx) {
+      const t = idx / peakIdx;
+      return 1.0 + (stage >= 4 ? 3.0 : 2.0) * Math.sin(t * (Math.PI / 2));
+    } else {
+      const t = (idx - peakIdx) / (total - 2 - peakIdx);
+      return (1.0 + (stage >= 4 ? 3.0 : 2.0)) - (stage >= 4 ? 2.5 : 1.5) * t;
+    }
+  }
+
+  // 1. First module always Calm Cruise
+  plan.push(MODULE_DEFS.calm_cruise);
+
+  for (let i = 1; i < numModules; i++) {
+    const prevMod = plan[i - 1];
+    let pool = available.filter(m => m.id !== prevMod.id);
+
+    // Reward slot before end
+    if (i === numModules - 2) {
+      const calmPool = pool.filter(m => m.id === 'calm_cruise' || m.id === 'wide_cavern');
+      if (calmPool.length > 0) pool = calmPool;
+    } else if (i === numModules - 1) {
+      const exitPool = pool.filter(m => m.id === 'stairs' || m.id === 'sine_wave' || m.id === 'calm_cruise');
+      if (exitPool.length > 0) pool = exitPool;
+    }
+
+    const targetD = targetDiffAt(i, numModules);
+    const scored = pool.map(m => {
+      let weight = (m.minStage === stage) ? 0.4 : 1.0;
+      const diffDist = Math.abs(m.diff - targetD);
+      const diffScore = Math.max(0.15, 1.0 - diffDist * 0.35);
+      return { mod: m, weight: weight * diffScore };
+    });
+
+    const totalWeight = scored.reduce((sum, item) => sum + item.weight, 0);
+    let r = prng() * totalWeight;
+    let chosen = scored[0].mod;
+    for (const item of scored) {
+      r -= item.weight;
+      if (r <= 0) { chosen = item.mod; break; }
+    }
+    plan.push(chosen);
+  }
+
+  // Variety check: Stage 1 requires all 4 modules; Stage 2+ requires >= 5 distinct modules
+  if (stage === 1) {
+    const required = ['calm_cruise', 'stairs', 'sine_wave', 'wide_cavern'];
+    for (const req of required) {
+      if (!plan.some(m => m.id === req)) {
+        for (let k = 1; k < numModules - 2; k++) {
+          const id = plan[k].id;
+          if (plan.filter(m => m.id === id).length > 1 &&
+              (k === 0 || plan[k - 1].id !== req) &&
+              (k === numModules - 1 || plan[k + 1].id !== req)) {
+            plan[k] = MODULE_DEFS[req];
+            break;
+          }
+        }
+      }
+    }
+  } else {
+    let distinct = new Set(plan.map(m => m.id));
+    if (distinct.size < 5) {
+      for (const cand of available) {
+        if (!distinct.has(cand.id)) {
+          for (let k = 1; k < numModules - 2; k++) {
+            if (plan.filter(m => m.id === plan[k].id).length > 1 &&
+                plan[k - 1].id !== cand.id && plan[k + 1].id !== cand.id) {
+              plan[k] = cand;
+              distinct.add(cand.id);
+              if (distinct.size >= 5) break;
+            }
+          }
+        }
+        if (distinct.size >= 5) break;
+      }
+    }
+  }
+
+  return plan;
+}
+
+function generateLevelPlan(lvl) {
+  let plan = generateLevelPlanRaw(lvl, 0);
+  if (lvl > 1) {
+    const prevPlan = generateLevelPlanRaw(lvl - 1, 0);
+    let diffCount = 0;
+    const len = Math.max(plan.length, prevPlan.length);
+    for (let i = 0; i < len; i++) {
+      if (!plan[i] || !prevPlan[i] || plan[i].id !== prevPlan[i].id) {
+        diffCount++;
+      }
+    }
+    let diffRatio = diffCount / len;
+    let salt = 1;
+    while (diffRatio < 0.50 && salt < 10) {
+      plan = generateLevelPlanRaw(lvl, salt);
+      diffCount = 0;
+      const l = Math.max(plan.length, prevPlan.length);
+      for (let i = 0; i < l; i++) {
+        if (!plan[i] || !prevPlan[i] || plan[i].id !== prevPlan[i].id) diffCount++;
+      }
+      diffRatio = diffCount / l;
+      salt++;
+    }
+  }
+  return plan;
+}
+
+// Stage-by-stage introduction announcements (Requirement 7)
+const STAGE_NEW_HAZARDS = {
+  1: null,
+  2: 'New: Saw Blades & Boost Rings',
+  3: 'New: Falling Spikes',
+  4: 'New: Laser Gates',
+  5: 'New: Swinging Pendulums',
+  6: 'New: Wind Currents',
+  7: 'New: Overcharged Hazards',
+  8: 'New: Apex Hazard Chaos'
+};
+
+function injectStageHazards(modSegs, modDef, modIdx, numMods, stage, prng, totalTunnelLen, curX) {
+  if (stage < 2) return;
+  const mStart = curX - TUNNEL_START_X;
+  const isFirst20Percent = (mStart < 0.20 * totalTunnelLen);
+  const isFinalCalm = (modIdx >= numMods - 2);
+  if (isFirst20Percent || isFinalCalm) return;
+
+  const targetSeg = modSegs[Math.floor(modSegs.length / 2)] || modSegs[0];
+  if (!targetSeg) return;
+  if (!targetSeg.obstacles) targetSeg.obstacles = [];
+
+  const isCalm = (modDef.id === 'calm_cruise' || modDef.id === 'wide_cavern');
+
+  if (isCalm) {
+    // 1. Boost Ring (from stage 2) in calm modules
+    if (stage >= 2 && prng() < 0.85) {
+      const ringX = targetSeg.x + targetSeg.w * 0.5;
+      const ringY = (targetSeg.top + targetSeg.bot) / 2;
+      targetSeg.obstacles.push({
+        type: 'boost_ring',
+        x: ringX,
+        y: ringY,
+        radius: 24,
+        collected: false
+      });
+    }
+    // 2. Air Current (from stage 6) in calm modules - gentle push, never dangerous, reward coin arc
+    if (stage >= 6 && prng() < 0.70) {
+      const windX = targetSeg.x + 35;
+      const windW = Math.min(200, targetSeg.w - 70);
+      const pushDir = (prng() < 0.5) ? -1 : 1;
+      targetSeg.obstacles.push({
+        type: 'air_current',
+        x: windX,
+        w: windW,
+        yTop: targetSeg.top,
+        yBot: targetSeg.bot,
+        pushDir: pushDir,
+        strength: 220
+      });
+    }
+    return;
+  }
+
+  // Action modules (stairs, sine_wave, ramps, funnel, comb)
+  const availableHazards = [];
+  if (stage >= 2) availableHazards.push('saw_blade');
+  if (stage >= 3) availableHazards.push('falling_spike');
+  if (stage >= 4) availableHazards.push('laser_gate');
+  if (stage >= 5) availableHazards.push('pendulum');
+
+  if (availableHazards.length === 0) return;
+
+  // Prioritize new hazard introduced in this stage at debut, then mixed
+  let chosenType = availableHazards[0];
+  if (stage === 2) {
+    chosenType = 'saw_blade';
+  } else if (stage === 3) {
+    chosenType = (prng() < 0.60) ? 'falling_spike' : 'saw_blade';
+  } else if (stage === 4) {
+    chosenType = (prng() < 0.55) ? 'laser_gate' : availableHazards[Math.floor(prng() * (availableHazards.length - 1))];
+  } else if (stage === 5) {
+    chosenType = (prng() < 0.50) ? 'pendulum' : availableHazards[Math.floor(prng() * (availableHazards.length - 1))];
+  } else {
+    chosenType = availableHazards[Math.floor(prng() * availableHazards.length)];
+  }
+
+  const hx = targetSeg.x + targetSeg.w * 0.5;
+
+  if (chosenType === 'saw_blade') {
+    const radius = Math.round(CAR_HITBOX_H * (0.48 + prng() * 0.18)); // ~17 to 24px (0.45-0.7 carH)
+    const onRail = (prng() < 0.5);
+    let sy = (targetSeg.top + targetSeg.bot) / 2;
+    if (onRail) {
+      sy = (prng() < 0.5) ? (targetSeg.top + radius + 2) : (targetSeg.bot - radius - 2);
+    }
+    const sliding = (prng() < 0.65);
+    const slideDist = sliding ? Math.min(2 * CAR_HITBOX_H, 65) : 0;
+    targetSeg.obstacles.push({
+      type: 'saw_blade',
+      x: hx,
+      y: sy,
+      radius,
+      slideDist,
+      slidePeriod: 3.0,
+      slidePhase: prng() * 3.0,
+      onRail,
+      dir: (prng() < 0.5 ? 1 : -1)
+    });
+  } else if (chosenType === 'falling_spike') {
+    const startY = targetSeg.top;
+    const maxDepth = Math.min(targetSeg.bot - 3.2 * CAR_HITBOX_H, startY + 120);
+    targetSeg.obstacles.push({
+      type: 'falling_spike',
+      x: hx,
+      startY,
+      curY: startY,
+      maxDepth,
+      h: 28,
+      state: 'idle',
+      warnTimer: 0.7,
+      velY: 0,
+      shake: 0
+    });
+  } else if (chosenType === 'laser_gate') {
+    targetSeg.obstacles.push({
+      type: 'laser_gate',
+      x: hx,
+      topY: targetSeg.top,
+      botY: targetSeg.bot,
+      period: 1.4,
+      onTime: 0.8,
+      warnTime: 0.4,
+      phase: prng() * 1.4
+    });
+  } else if (chosenType === 'pendulum') {
+    const anchorY = targetSeg.top;
+    const maxL = Math.max(50, Math.min(130, (targetSeg.bot - targetSeg.top) - 3.4 * CAR_HITBOX_H));
+    targetSeg.obstacles.push({
+      type: 'pendulum',
+      anchorX: hx,
+      anchorY,
+      length: maxL,
+      radius: 18,
+      period: 2.2,
+      maxAngle: 0.55,
+      phase: prng() * 2.2
+    });
+  }
+}
+
+function injectStageHazardsIntoSegments(segsList, lvl, prng) {
+  const stage = getStageNumber(lvl);
+  if (stage < 2) return;
+  const tunnelSegs = [];
+  for (let i = 0; i < segsList.length; i++) {
+    const s = segsList[i];
+    if (!s.isOpen && s.x >= TUNNEL_START_X && s.x + s.w <= TUNNEL_END_X) {
+      tunnelSegs.push(s);
+    }
+  }
+  if (tunnelSegs.length < 5) return;
+  const valid = tunnelSegs.slice(3, tunnelSegs.length - 2);
+  if (valid.length === 0) return;
+
+  const count = (stage === 2) ? 2 : (stage <= 4 ? 3 : 4);
+  const step = Math.max(1, Math.floor(valid.length / (count + 1)));
+
+  for (let k = 0; k < count; k++) {
+    const idx = Math.min(valid.length - 1, (k + 1) * step + (k % 2 === 0 ? 0 : -1));
+    const targetSeg = valid[idx];
+    if (!targetSeg || (targetSeg.obstacles && targetSeg.obstacles.length > 0)) continue;
+    if (!targetSeg.obstacles) targetSeg.obstacles = [];
+
+    const available = [];
+    if (stage >= 2) available.push('saw_blade', 'boost_ring');
+    if (stage >= 3) available.push('falling_spike');
+    if (stage >= 4) available.push('laser_gate');
+    if (stage >= 5) available.push('pendulum');
+    if (stage >= 6) available.push('air_current');
+
+    let chosenType = available[Math.floor(prng() * available.length)];
+    if (k === 0) {
+      if (stage === 2) chosenType = 'saw_blade';
+      else if (stage === 3) chosenType = 'falling_spike';
+      else if (stage === 4) chosenType = 'laser_gate';
+      else if (stage === 5) chosenType = 'pendulum';
+      else if (stage === 6) chosenType = 'air_current';
+    }
+
+    const hx = targetSeg.x + targetSeg.w * 0.5;
+    if (chosenType === 'boost_ring') {
+      const ringY = (targetSeg.top + targetSeg.bot) / 2;
+      targetSeg.obstacles.push({
+        type: 'boost_ring',
+        x: hx,
+        y: ringY,
+        radius: 24,
+        collected: false
+      });
+    } else if (chosenType === 'saw_blade') {
+      const radius = Math.round(CAR_HITBOX_H * (0.45 + prng() * 0.15));
+      const onRail = (prng() < 0.5);
+      let sy = (targetSeg.top + targetSeg.bot) / 2;
+      if (onRail) {
+        sy = (prng() < 0.5) ? (targetSeg.top + radius + 4) : (targetSeg.bot - radius - 4);
+      }
+      const sliding = (prng() < 0.65);
+      const slideDist = sliding ? Math.min(1.8 * CAR_HITBOX_H, 45) : 0;
+      targetSeg.obstacles.push({
+        type: 'saw_blade',
+        x: hx,
+        y: sy,
+        radius,
+        slideDist,
+        slidePeriod: 3.0,
+        slidePhase: prng() * 3.0,
+        onRail,
+        dir: (prng() < 0.5 ? 1 : -1)
+      });
+    } else if (chosenType === 'falling_spike') {
+      const startY = targetSeg.top;
+      const maxDepth = Math.min(targetSeg.bot - 3.0 * CAR_HITBOX_H, startY + 80);
+      targetSeg.obstacles.push({
+        type: 'falling_spike',
+        x: hx,
+        startY,
+        curY: startY,
+        maxDepth,
+        h: 28,
+        state: 'idle',
+        warnTimer: 0.7,
+        velY: 0,
+        shake: 0
+      });
+    } else if (chosenType === 'laser_gate') {
+      targetSeg.obstacles.push({
+        type: 'laser_gate',
+        x: hx,
+        topY: targetSeg.top,
+        botY: targetSeg.bot,
+        period: 1.4,
+        onTime: 0.8,
+        warnTime: 0.4,
+        phase: prng() * 1.4
+      });
+    } else if (chosenType === 'pendulum') {
+      const anchorY = targetSeg.top;
+      const maxL = Math.max(35, Math.min(100, (targetSeg.bot - targetSeg.top) - 3.0 * CAR_HITBOX_H));
+      targetSeg.obstacles.push({
+        type: 'pendulum',
+        anchorX: hx,
+        anchorY,
+        length: maxL,
+        radius: 18,
+        period: 2.2,
+        maxAngle: 0.50,
+        phase: prng() * 2.2
+      });
+    } else if (chosenType === 'air_current') {
+      const windX = targetSeg.x + 20;
+      const windW = Math.min(160, targetSeg.w - 40);
+      const pushDir = (prng() < 0.5) ? -1 : 1;
+      targetSeg.obstacles.push({
+        type: 'air_current',
+        x: windX,
+        w: windW,
+        yTop: targetSeg.top,
+        yBot: targetSeg.bot,
+        pushDir: pushDir,
+        strength: 180
+      });
+    }
+  }
+}
+
+function buildLevelFromPlan(lvl, plan) {
+  const prng = mulberry32(hashInt(lvl * 55555 + 12345));
+  const totalTunnelLen = TUNNEL_LENGTH;
+  const numMods = plan.length;
+  const baseDurations = {
+    calm_cruise: 4.5,
+    stairs: 5.0,
+    sine_wave: 5.5,
+    ramps: 5.0,
+    funnel: 4.5,
+    gates: 5.5,
+    slalom: 5.5,
+    floating_islands: 5.0,
+    wide_cavern: 5.0,
+    comb: 4.5
+  };
+
+  const rawLens = plan.map(m => (baseDurations[m.id] || 5.0) * scrollSpeed());
+  const rawSum = rawLens.reduce((a, b) => a + b, 0);
+  const scale = totalTunnelLen / rawSum;
+
+  const modLens = rawLens.map(l => Math.round(l * scale));
+  let allocatedSum = modLens.reduce((a, b) => a + b, 0);
+  modLens[modLens.length - 1] += (totalTunnelLen - allocatedSum);
+
+  const tunnelSegs = [];
+  let curX = TUNNEL_START_X;
+  let curCenter = 0.50 * H;
+  let curGap = getGapHeight(lvl, 0);
+
+  for (let i = 0; i < numMods; i++) {
+    const modDef = plan[i];
+    const mLen = modLens[i];
+    let res = modDef.gen(curX, mLen, curCenter, curGap, lvl, prng);
+    injectStageHazards(res.segs, modDef, i, numMods, getStageNumber(lvl), prng, totalTunnelLen, curX);
+
+    let fair = verifyModuleFairness(res.segs, scrollSpeed());
+    let retries = 0;
+    while (!fair && retries < 5) {
+      widenModuleGaps(res.segs, 1.10);
+      fair = verifyModuleFairness(res.segs, scrollSpeed());
+      retries++;
+    }
+    if (!fair) {
+      res = genCalmCruiseModule(curX, mLen, curCenter, curGap, lvl, prng);
+    }
+
+    for (const s of res.segs) {
+      tunnelSegs.push(s);
+    }
+    curX += mLen;
+    curCenter = res.endCenter;
+    curGap = res.endGap;
+  }
+
+  return tunnelSegs;
+}
+
 function startLevel(lvl) {
   curLevel = lvl;
 
@@ -4769,6 +6328,13 @@ function startLevel(lvl) {
   lastC = ROAD_TOP - 20;
   lastGap = 380;
   parts = [];
+  podDeploy = 0;
+  flameIntensity = 0;
+  for (let i = 0; i < sparkPool.length; i++) sparkPool[i].active = false;
+  activeFallingSpike = null;
+  boostTimer = 0;
+  floatingTexts.length = 0;
+  for (let i = 0; i < hazardParticlePool.length; i++) hazardParticlePool[i].active = false;
   stopping = false;
   stopTimer = 0;
   autoLanding = false;
@@ -4831,12 +6397,16 @@ function startLevel(lvl) {
   segs = [{ x: START_ROAD_START, w: initW, top: -300, bot: H + 300, curTop: -300, curBot: H + 300, topSpikes, botSpikes, isOpen: true, moving: false }];
   nextX = TUNNEL_START_X;
 
+  tunnelSegCount = 0;
   while (nextX < TUNNEL_END_X) {
     addSeg(false);
   }
 
   // Requirement 4: Sanitize all neighboring segment pairs
   sanitizeLevelSegments(segs);
+
+  // Inject stage hazards
+  injectStageHazardsIntoSegments(segs, curLevel, levelPRNG);
 
   // Generate collectible coins and rare blue gem for the level
   generateLevelCoins(lvl, segs);
@@ -4911,6 +6481,9 @@ function die() {
   deadAt = performance.now();
   hold = false;
   thrust = 0;
+  podDeploy = 0;
+  flameIntensity = 0;
+  for (let i = 0; i < sparkPool.length; i++) sparkPool[i].active = false;
   playCrashSound();
   const progress = getLevelProgress();
   const curScore = Math.floor(progress * 100);
@@ -5334,124 +6907,652 @@ function drawRoadPlatform(startX, endX, roadTop, isFinish = false) {
   }
 }
 
-// Thin studded rails with rivets, end caps and soft shadow for high contrast on bright sky
+// Dark gunmetal rail (thickness 0.28 * carVis = 12px) with rivets, lighter edge line and soft shadow
 function drawWall(s, x) {
   const cfg = curConfig;
   const w = s.w + 1;
   const top = (s.curTop !== undefined) ? s.curTop : s.top;
   const bot = (s.curBot !== undefined) ? s.curBot : s.bot;
-  drawRailSegment(x, top - 28, w, true, cfg);
-  drawRailSegment(x, bot + 18, w, false, cfg);
+  if (s.isSlanted && s.top2 !== undefined) {
+    drawSlantedRail(x, (top - 18) - RAIL_THICKNESS, x + s.w, (s.top2 - 18) - RAIL_THICKNESS, true, cfg);
+    drawSlantedRail(x, bot + 18, x + s.w, s.bot2 + 18, false, cfg);
+  } else {
+    drawRailSegment(x, (top - 18) - RAIL_THICKNESS, w, true, cfg);
+    drawRailSegment(x, bot + 18, w, false, cfg);
+  }
+}
+
+function drawHexRivet(c, cx, cy, r) {
+  c.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    const hx = cx + r * Math.cos(a);
+    const hy = cy + r * Math.sin(a);
+    if (i === 0) c.moveTo(hx, hy);
+    else c.lineTo(hx, hy);
+  }
+  c.closePath();
+  c.fill();
+}
+
+function drawGearRivet(c, cx, cy, r) {
+  const teeth = 6;
+  c.beginPath();
+  for (let i = 0; i < teeth * 2; i++) {
+    const a = (i * Math.PI) / teeth;
+    const rad = (i % 2 === 0) ? r : r * 0.68;
+    const gx = cx + rad * Math.cos(a);
+    const gy = cy + rad * Math.sin(a);
+    if (i === 0) c.moveTo(gx, gy);
+    else c.lineTo(gx, gy);
+  }
+  c.closePath();
+  c.fill();
+}
+
+function drawSlantedRail(x1, y1, x2, y2, isCeiling, cfg) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = isCeiling ? -2 : 3;
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.lineTo(x2, y2 + RAIL_THICKNESS);
+  ctx.lineTo(x1, y1 + RAIL_THICKNESS);
+  ctx.closePath();
+
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2) + RAIL_THICKNESS;
+  const baseRailColor = (cfg && cfg.railColor) ? cfg.railColor : '#2d3748';
+  const railGrad = ctx.createLinearGradient(0, minY, 0, maxY);
+  if (isCeiling) {
+    railGrad.addColorStop(0.0, '#0a0d14');
+    railGrad.addColorStop(0.5, baseRailColor);
+    railGrad.addColorStop(1.0, adjustColor(baseRailColor, 0.30));
+  } else {
+    railGrad.addColorStop(0.0, adjustColor(baseRailColor, 0.30));
+    railGrad.addColorStop(0.5, baseRailColor);
+    railGrad.addColorStop(1.0, '#0a0d14');
+  }
+  ctx.fillStyle = railGrad;
+  ctx.fill();
+
+  ctx.shadowColor = 'transparent';
+
+  // Highlight and dark outlines along slope
+  ctx.strokeStyle = isCeiling ? 'rgba(255, 255, 255, 0.85)' : '#0a0d14';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1 + (isCeiling ? RAIL_THICKNESS : 0));
+  ctx.lineTo(x2, y2 + (isCeiling ? RAIL_THICKNESS : 0));
+  ctx.stroke();
+
+  ctx.strokeStyle = isCeiling ? '#0a0d14' : 'rgba(255, 255, 255, 0.85)';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1 + (isCeiling ? 0 : RAIL_THICKNESS));
+  ctx.lineTo(x2, y2 + (isCeiling ? 0 : RAIL_THICKNESS));
+  ctx.stroke();
+
+  // Rivets along the slanted rail
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  const rivetSteps = Math.floor(dist / RIVET_SPACING);
+  const rivetStyle = (cfg && cfg.rivetStyle) ? cfg.rivetStyle : 'round';
+
+  for (let k = 1; k < rivetSteps; k++) {
+    const t = k / rivetSteps;
+    const rx = x1 + (x2 - x1) * t;
+    const ry = (y1 + (y2 - y1) * t) + RAIL_THICKNESS / 2;
+    if (rivetStyle === 'hex') {
+      ctx.fillStyle = '#cbd5e1';
+      drawHexRivet(ctx, rx, ry, 2.5);
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath(); ctx.arc(rx, ry, 0.8, 0, Math.PI * 2); ctx.fill();
+    } else if (rivetStyle === 'gear') {
+      ctx.fillStyle = '#94a3b8';
+      drawGearRivet(ctx, rx, ry, 2.8);
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath(); ctx.arc(rx, ry, 0.9, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const grad = ctx.createRadialGradient(rx - 0.7, ry - 0.7, 0.3, rx, ry, 2.3);
+      grad.addColorStop(0.0, '#ffffff');
+      grad.addColorStop(0.5, '#cbd5e1');
+      grad.addColorStop(1.0, '#334155');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(rx, ry, 2.3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawObstacles(s, screenX, cfg) {
+  if (!s.obstacles || s.obstacles.length === 0) return;
+  for (const obs of s.obstacles) {
+    const ox = obs.x - cam;
+    if (ox + obs.w < -60 || ox > W + 60) continue;
+
+    if (obs.type === 'gate') {
+      // Upper Bar down to obs.gapTop
+      ctx.save();
+      ctx.shadowColor = 'rgba(15, 23, 42, 0.45)';
+      ctx.shadowBlur = 6;
+      const topH = Math.max(10, obs.gapTop);
+      const gateGrad = ctx.createLinearGradient(ox, 0, ox + obs.w, 0);
+      gateGrad.addColorStop(0, '#1e293b');
+      gateGrad.addColorStop(0.3, cfg.railColor || '#64748b');
+      gateGrad.addColorStop(0.7, cfg.railColor || '#64748b');
+      gateGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = gateGrad;
+      ctx.fillRect(ox, 0, obs.w, topH);
+
+      // Warning hazard stripes on upper bar
+      ctx.fillStyle = 'rgba(234, 179, 8, 0.85)';
+      for (let sy = 12; sy < topH - 8; sy += 18) {
+        ctx.fillRect(ox + 3, sy, obs.w - 6, 6);
+      }
+      // Spikes at bottom lip of upper gate bar
+      const spCount = Math.floor(obs.w / 12);
+      for (let k = 0; k < spCount; k++) {
+        drawSpike(ox + k * 12, obs.gapTop - 18, true, { h: 14, size: 'small' }, k);
+      }
+
+      // Lower Bar from obs.gapBot down to H
+      const botH = Math.max(10, H - obs.gapBot);
+      ctx.fillStyle = gateGrad;
+      ctx.fillRect(ox, obs.gapBot, obs.w, botH);
+
+      // Warning stripes on lower bar
+      ctx.fillStyle = 'rgba(234, 179, 8, 0.85)';
+      for (let sy = obs.gapBot + 8; sy < H - 8; sy += 18) {
+        ctx.fillRect(ox + 3, sy, obs.w - 6, 6);
+      }
+      // Spikes at top lip of lower gate bar
+      for (let k = 0; k < spCount; k++) {
+        drawSpike(ox + k * 12, obs.gapBot + 18, false, { h: 14, size: 'small' }, k);
+      }
+
+      // Portal energy glow between bars
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+      ctx.fillRect(ox - 4, obs.gapTop, obs.w + 8, obs.gapBot - obs.gapTop);
+      ctx.restore();
+
+    } else if (obs.type === 'stalactite') {
+      ctx.save();
+      const toothW = obs.w;
+      const topH = Math.max(12, obs.tipY);
+      const grad = ctx.createLinearGradient(ox, 0, ox + toothW, 0);
+      grad.addColorStop(0, '#1e293b');
+      grad.addColorStop(0.5, cfg.railColor || '#64748b');
+      grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(ox, 0);
+      ctx.lineTo(ox + toothW, 0);
+      ctx.lineTo(ox + toothW * 0.7, topH - 12);
+      ctx.lineTo(ox + toothW / 2, topH);
+      ctx.lineTo(ox + toothW * 0.3, topH - 12);
+      ctx.closePath();
+      ctx.fill();
+      drawSpike(ox + (toothW - 12) / 2, obs.tipY - 18, true, { h: 20, size: 'medium' }, 0);
+      ctx.restore();
+
+    } else if (obs.type === 'stalagmite') {
+      ctx.save();
+      const toothW = obs.w;
+      const grad = ctx.createLinearGradient(ox, 0, ox + toothW, 0);
+      grad.addColorStop(0, '#1e293b');
+      grad.addColorStop(0.5, cfg.railColor || '#64748b');
+      grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(ox, H);
+      ctx.lineTo(ox + toothW, H);
+      ctx.lineTo(ox + toothW * 0.7, obs.tipY + 12);
+      ctx.lineTo(ox + toothW / 2, obs.tipY);
+      ctx.lineTo(ox + toothW * 0.3, obs.tipY + 12);
+      ctx.closePath();
+      ctx.fill();
+      drawSpike(ox + (toothW - 12) / 2, obs.tipY + 18, false, { h: 20, size: 'medium' }, 0);
+      ctx.restore();
+
+    } else if (obs.type === 'floating_block') {
+      ctx.save();
+      ctx.shadowColor = 'rgba(15, 23, 42, 0.45)';
+      ctx.shadowBlur = 8;
+      const bGrad = ctx.createLinearGradient(0, obs.y, 0, obs.y + obs.h);
+      bGrad.addColorStop(0, '#ffffff');
+      bGrad.addColorStop(0.2, cfg.railColor || '#475569');
+      bGrad.addColorStop(0.8, '#1e293b');
+      bGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = bGrad;
+      roundRect(ctx, ox, obs.y, obs.w, obs.h, 6);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+
+      // Outline
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.8;
+      roundRect(ctx, ox, obs.y, obs.w, obs.h, 6);
+      ctx.stroke();
+
+      // Warning hazard stripe center
+      ctx.fillStyle = 'rgba(234, 179, 8, 0.85)';
+      ctx.fillRect(ox + 8, obs.y + obs.h / 2 - 2, obs.w - 16, 4);
+
+      // Spikes on top and bottom of island
+      const numSp = Math.floor((obs.w - 12) / 12);
+      for (let k = 0; k < numSp; k++) {
+        drawSpike(ox + 6 + k * 12, obs.y + 18, false, { h: 14, size: 'small' }, k);
+        drawSpike(ox + 6 + k * 12, obs.y + obs.h - 18, true, { h: 14, size: 'small' }, k);
+      }
+      ctx.restore();
+
+    } else if (obs.type === 'saw_blade') {
+      // 1. SAW BLADE (spinning circular saw, telegraphed glow, rail/open-air slide)
+      const slide = (obs.slideDist || 0) * Math.sin((gameTime + (obs.slidePhase || 0)) * 2 * Math.PI / (obs.slidePeriod || 3.0));
+      const curWx = obs.x + slide;
+      const sox = curWx - cam;
+      if (sox + obs.radius < -40 || sox - obs.radius > W + 40) continue;
+
+      ctx.save();
+      // Draw slide track if moving
+      if (obs.slideDist > 0) {
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(obs.x - obs.slideDist - cam, obs.y);
+        ctx.lineTo(obs.x + obs.slideDist - cam, obs.y);
+        ctx.stroke();
+      }
+
+      // Teeth glow in stage accent color
+      ctx.shadowColor = cfg.accentColor || '#38bdf8';
+      ctx.shadowBlur = 8;
+
+      ctx.translate(sox, obs.y);
+      ctx.rotate(gameTime * 14 * (obs.dir || 1));
+      const d = obs.radius * 2;
+      if (sawBladeCanvas) {
+        ctx.drawImage(sawBladeCanvas, -obs.radius, -obs.radius, d, d);
+      } else {
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath(); ctx.arc(0, 0, obs.radius, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+
+    } else if (obs.type === 'falling_spike') {
+      // 2. FALLING SPIKE (shaking telegraph & thin warning line 0.7s before drop)
+      const fx = obs.x - cam;
+      if (fx < -40 || fx > W + 40) continue;
+
+      if (obs.state === 'warning') {
+        // Thin glowing warning line down to safe depth
+        ctx.save();
+        ctx.strokeStyle = cfg.accentColor || '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.globalAlpha = 0.5 + 0.4 * Math.sin((0.7 - obs.warnTimer) * 30);
+        ctx.beginPath();
+        ctx.moveTo(fx, obs.startY);
+        ctx.lineTo(fx, obs.maxDepth);
+        ctx.stroke();
+        ctx.restore();
+
+        // Shaking spike hanging from ceiling
+        drawSpike(fx + (obs.shake || 0) - 6, obs.startY - 18, true, { h: obs.h || 28, size: 'big' }, 0);
+      } else if (obs.state === 'falling') {
+        // Motion trail
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(fx, obs.curY - 14);
+        ctx.lineTo(fx, obs.curY - 2);
+        ctx.stroke();
+        ctx.restore();
+
+        drawSpike(fx - 6, obs.curY - 18, true, { h: obs.h || 28, size: 'big' }, 0);
+      } else if (obs.state === 'idle') {
+        drawSpike(fx - 6, obs.startY - 18, true, { h: obs.h || 28, size: 'big' }, 0);
+      }
+
+    } else if (obs.type === 'laser_gate') {
+      // 3. LASER GATE (top/bot emitters, 0.4s warning flicker before 0.8s lethal beam)
+      const lx = obs.x - cam;
+      if (lx < -40 || lx > W + 40) continue;
+
+      ctx.save();
+      // Draw emitter housings
+      if (laserEmitterCanvas) {
+        ctx.drawImage(laserEmitterCanvas, lx - 16, obs.topY - 18, 32, 20);
+        ctx.save();
+        ctx.translate(lx, obs.botY + 8);
+        ctx.rotate(Math.PI);
+        ctx.drawImage(laserEmitterCanvas, -16, -10, 32, 20);
+        ctx.restore();
+      }
+
+      const t = (gameTime + obs.phase) % 1.4;
+      if (t >= 0.2 && t < 0.6) {
+        // Warning mode: thin flickering energy wire (not lethal)
+        ctx.strokeStyle = cfg.accentColor || '#38bdf8';
+        ctx.globalAlpha = 0.35 + 0.35 * Math.sin(gameTime * 50);
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(lx, obs.topY);
+        ctx.lineTo(lx, obs.botY);
+        ctx.stroke();
+      } else if (t >= 0.6) {
+        // Active lethal mode (0.8s on)
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = cfg.accentColor || '#38bdf8';
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(lx - 5, obs.topY, 10, obs.botY - obs.topY);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 1.0;
+        ctx.fillRect(lx - 1.8, obs.topY, 3.6, obs.botY - obs.topY);
+
+        // Discharge plasma nodes
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(lx, obs.topY + 3, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(lx, obs.botY - 3, 4, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+
+    } else if (obs.type === 'pendulum') {
+      // 4. PENDULUM (spiked ball on chain swinging from ceiling, >= 3.0 carH floor clearance)
+      const anchorSx = obs.anchorX - cam;
+      const anchorSy = obs.anchorY;
+      const theta = obs.maxAngle * Math.sin((gameTime + obs.phase) * 2 * Math.PI / obs.period);
+      const ballWx = obs.anchorX + obs.length * Math.sin(theta);
+      const ballWy = obs.anchorY + obs.length * Math.cos(theta);
+      const ballSx = ballWx - cam;
+      const ballSy = ballWy;
+
+      if (Math.min(anchorSx, ballSx) < -60 || Math.max(anchorSx, ballSx) > W + 60) continue;
+
+      ctx.save();
+      // Ceiling anchor
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(anchorSx - 8, anchorSy - 3, 16, 6);
+
+      // Steel chain
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(anchorSx, anchorSy);
+      ctx.lineTo(ballSx, ballSy);
+      ctx.stroke();
+
+      // Spiked wrecking ball
+      ctx.translate(ballSx, ballSy);
+      ctx.rotate(theta);
+      const bd = obs.radius * 2;
+      if (pendulumBallCanvas) {
+        ctx.drawImage(pendulumBallCanvas, -obs.radius, -obs.radius, bd, bd);
+      } else {
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath(); ctx.arc(0, 0, obs.radius, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+
+    } else if (obs.type === 'air_current') {
+      // 5. AIR CURRENT (glowing wind tunnel, gentle push, reward coin trail)
+      const ax = obs.x - cam;
+      if (ax + obs.w < -40 || ax > W + 40) continue;
+
+      ctx.save();
+      const grad = ctx.createLinearGradient(ax, 0, ax + obs.w, 0);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+      grad.addColorStop(0.2, 'rgba(56, 189, 248, 0.12)');
+      grad.addColorStop(0.8, 'rgba(56, 189, 248, 0.12)');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(ax, obs.yTop, obs.w, obs.yBot - obs.yTop);
+
+      // Flowing chevrons
+      ctx.strokeStyle = cfg.accentColor || '#38bdf8';
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.45;
+      const flowOff = (gameTime * 70 * obs.pushDir) % 36;
+      for (let cx = ax + 24; cx < ax + obs.w - 20; cx += 50) {
+        for (let cy = obs.yTop + 24; cy < obs.yBot - 16; cy += 36) {
+          const chevY = cy + flowOff;
+          if (chevY > obs.yTop + 10 && chevY < obs.yBot - 10) {
+            ctx.beginPath();
+            if (obs.pushDir < 0) {
+              // Pointing up
+              ctx.moveTo(cx - 6, chevY + 4); ctx.lineTo(cx, chevY - 4); ctx.lineTo(cx + 6, chevY + 4);
+            } else {
+              // Pointing down
+              ctx.moveTo(cx - 6, chevY - 4); ctx.lineTo(cx, chevY + 4); ctx.lineTo(cx + 6, chevY - 4);
+            }
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.restore();
+
+    } else if (obs.type === 'boost_ring') {
+      // 6. BOOST RING (glowing toroid in stage accent color)
+      if (obs.collected) continue;
+      const rx = obs.x - cam;
+      if (rx + obs.radius < -40 || rx - obs.radius > W + 40) continue;
+
+      ctx.save();
+      ctx.translate(rx, obs.y);
+      const pulse = 1.0 + 0.08 * Math.sin(gameTime * 8);
+      ctx.scale(pulse, pulse);
+      const rd = obs.radius * 2;
+      if (boostRingCanvas) {
+        ctx.drawImage(boostRingCanvas, -obs.radius, -obs.radius, rd, rd);
+      } else {
+        ctx.strokeStyle = cfg.accentColor || '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, obs.radius, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
 }
 
 function drawRailSegment(x, y, w, isCeiling, cfg) {
   ctx.save();
   // Soft shadow so rails stand out clearly against bright sky picture
-  ctx.shadowColor = 'rgba(15, 23, 42, 0.45)';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
   ctx.shadowBlur = 6;
   ctx.shadowOffsetY = isCeiling ? -2 : 3;
 
-  const railGrad = ctx.createLinearGradient(0, y, 0, y + 10);
-  railGrad.addColorStop(0, '#ffffff');
-  railGrad.addColorStop(0.25, cfg.railColor || '#64748b');
-  railGrad.addColorStop(0.8, cfg.railColor || '#64748b');
-  railGrad.addColorStop(1, '#0f172a');
+  const baseRailColor = (cfg && cfg.railColor) ? cfg.railColor : '#2d3748';
+  const railGrad = ctx.createLinearGradient(0, y, 0, y + RAIL_THICKNESS);
+  if (isCeiling) {
+    railGrad.addColorStop(0.0, '#0a0d14');
+    railGrad.addColorStop(0.5, baseRailColor);
+    railGrad.addColorStop(1.0, adjustColor(baseRailColor, 0.30));
+  } else {
+    railGrad.addColorStop(0.0, adjustColor(baseRailColor, 0.30));
+    railGrad.addColorStop(0.5, baseRailColor);
+    railGrad.addColorStop(1.0, '#0a0d14');
+  }
   ctx.fillStyle = railGrad;
-  ctx.fillRect(x, y, w, 10);
+  ctx.fillRect(x, y, w, RAIL_THICKNESS);
 
   ctx.shadowColor = 'transparent';
 
-  // Highlight and dark outlines
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.fillRect(x, y, w, 1.5);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
-  ctx.fillRect(x, y + 8.5, w, 1.5);
+  // Lighter inner edge line and dark outer edge
+  if (isCeiling) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillRect(x, y + RAIL_THICKNESS - 1, w, 1);
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(x, y, w, 1);
+  } else {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillRect(x, y, w, 1);
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(x, y + RAIL_THICKNESS - 1, w, 1);
+  }
 
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(x - 1, y - 1, 3, 12);
-  ctx.fillRect(x + w - 2, y - 1, 3, 12);
+  // End caps
+  ctx.fillStyle = '#0a0d14';
+  ctx.fillRect(x - 1, y, 2, RAIL_THICKNESS);
+  ctx.fillRect(x + w - 1, y, 2, RAIL_THICKNESS);
 
-  const centerY = y + 5;
-  const startRivet = Math.floor(x / 16) * 16;
-  for (let rx = startRivet; rx <= x + w + 16; rx += 16) {
+  // Rivets spaced every RIVET_SPACING (23px)
+  const centerY = y + RAIL_THICKNESS / 2;
+  const startRivet = Math.floor(x / RIVET_SPACING) * RIVET_SPACING;
+  const rivetStyle = (cfg && cfg.rivetStyle) ? cfg.rivetStyle : 'round';
+
+  for (let rx = startRivet; rx <= x + w + RIVET_SPACING; rx += RIVET_SPACING) {
     if (rx < x + 3 || rx > x + w - 3) continue;
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath(); ctx.arc(rx, centerY, 2.2, 0, 6.28); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(rx - 0.6, centerY - 0.6, 1, 0, 6.28); ctx.fill();
+    if (rivetStyle === 'hex') {
+      ctx.fillStyle = '#cbd5e1';
+      drawHexRivet(ctx, rx, centerY, 2.5);
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath(); ctx.arc(rx, centerY, 0.8, 0, Math.PI * 2); ctx.fill();
+    } else if (rivetStyle === 'gear') {
+      ctx.fillStyle = '#94a3b8';
+      drawGearRivet(ctx, rx, centerY, 2.8);
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath(); ctx.arc(rx, centerY, 0.9, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // Classic round silver rivet with 3D radial gradient
+      const grad = ctx.createRadialGradient(rx - 0.7, centerY - 0.7, 0.3, rx, centerY, 2.3);
+      grad.addColorStop(0.0, '#ffffff');
+      grad.addColorStop(0.5, '#cbd5e1');
+      grad.addColorStop(1.0, '#334155');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(rx, centerY, 2.3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
 
 function drawVerticalRailConnector(x, y1, y2, cfg) {
   const minY = Math.min(y1, y2);
-  const maxY = Math.max(y1, y2) + 10;
+  const maxY = Math.max(y1, y2) + RAIL_THICKNESS;
   const h = maxY - minY;
-  if (h <= 10) return;
+  if (h <= RAIL_THICKNESS) return;
 
   ctx.save();
-  ctx.shadowColor = 'rgba(15, 23, 42, 0.45)';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
   ctx.shadowBlur = 6;
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 1;
 
-  const railGrad = ctx.createLinearGradient(x - 5, 0, x + 5, 0);
-  railGrad.addColorStop(0, '#ffffff');
-  railGrad.addColorStop(0.25, cfg.railColor || '#64748b');
-  railGrad.addColorStop(0.8, cfg.railColor || '#64748b');
-  railGrad.addColorStop(1, '#0f172a');
+  const baseRailColor = (cfg && cfg.railColor) ? cfg.railColor : '#2d3748';
+  const railGrad = ctx.createLinearGradient(x - RAIL_THICKNESS / 2, 0, x + RAIL_THICKNESS / 2, 0);
+  railGrad.addColorStop(0.0, '#0a0d14');
+  railGrad.addColorStop(0.5, baseRailColor);
+  railGrad.addColorStop(1.0, adjustColor(baseRailColor, 0.30));
   ctx.fillStyle = railGrad;
-  ctx.fillRect(x - 5, minY, 10, h);
+  ctx.fillRect(x - RAIL_THICKNESS / 2, minY, RAIL_THICKNESS, h);
 
   ctx.shadowColor = 'transparent';
 
   // Highlight and dark outlines
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.fillRect(x - 5, minY, 1.5, h);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
-  ctx.fillRect(x + 3.5, minY, 1.5, h);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.fillRect(x + RAIL_THICKNESS / 2 - 1, minY, 1, h);
+  ctx.fillStyle = '#0a0d14';
+  ctx.fillRect(x - RAIL_THICKNESS / 2, minY, 1, h);
 
   // End caps
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(x - 6, minY - 1, 12, 3);
-  ctx.fillRect(x - 6, maxY - 2, 12, 3);
+  ctx.fillStyle = '#0a0d14';
+  ctx.fillRect(x - RAIL_THICKNESS / 2 - 1, minY - 1, RAIL_THICKNESS + 2, 2);
+  ctx.fillRect(x - RAIL_THICKNESS / 2 - 1, maxY - 1, RAIL_THICKNESS + 2, 2);
 
-  // Rivets spaced every 16px along the vertical connector
+  // Rivets spaced every RIVET_SPACING (23px)
   const centerX = x;
-  const startRivetY = Math.floor(minY / 16) * 16;
-  for (let ry = startRivetY; ry <= maxY + 16; ry += 16) {
+  const startRivetY = Math.floor(minY / RIVET_SPACING) * RIVET_SPACING;
+  const rivetStyle = (cfg && cfg.rivetStyle) ? cfg.rivetStyle : 'round';
+
+  for (let ry = startRivetY; ry <= maxY + RIVET_SPACING; ry += RIVET_SPACING) {
     if (ry < minY + 4 || ry > maxY - 4) continue;
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath(); ctx.arc(centerX, ry, 2.2, 0, 6.28); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(centerX - 0.6, ry - 0.6, 1, 0, 6.28); ctx.fill();
+    if (rivetStyle === 'hex') {
+      ctx.fillStyle = '#cbd5e1';
+      drawHexRivet(ctx, centerX, ry, 2.5);
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath(); ctx.arc(centerX, ry, 0.8, 0, Math.PI * 2); ctx.fill();
+    } else if (rivetStyle === 'gear') {
+      ctx.fillStyle = '#94a3b8';
+      drawGearRivet(ctx, centerX, ry, 2.8);
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath(); ctx.arc(centerX, ry, 0.9, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const grad = ctx.createRadialGradient(centerX - 0.7, ry - 0.7, 0.3, centerX, ry, 2.3);
+      grad.addColorStop(0.0, '#ffffff');
+      grad.addColorStop(0.5, '#cbd5e1');
+      grad.addColorStop(1.0, '#334155');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(centerX, ry, 2.3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
 
-function drawSpike(x, baseY, isTop, sp, idx = 0) {
+function drawSpike(x, baseY, isTop, sp, idx = 0, slope = 0) {
   if (!sp || !sp.h || sp.h <= 0) return;
-  const stageIdx = (getStageNumber(curLevel) - 1) % STAGES.length;
-  const stageCanvases = (stageSpikeCanvases && stageSpikeCanvases[stageIdx]) ? stageSpikeCanvases[stageIdx] : spikeCanvases;
-  if (!stageCanvases) return;
-
-  const hasVariants = (stageIdx === 4 || stageIdx === 5);
-  const variant = hasVariants ? (idx % 2) : 0;
-  const key = hasVariants ? `${sp.size}_${isTop ? 'top' : 'bot'}_${variant}` : `${sp.size}_${isTop ? 'top' : 'bot'}`;
-  const spr = stageCanvases[key] || stageCanvases[`${sp.size}_${isTop ? 'top' : 'bot'}`] || spikeCanvases[key];
+  const sizeKey = sp.size || (sp.h <= SPIKE_H_SMALL ? 'small' : (sp.h <= SPIKE_H_MEDIUM ? 'medium' : 'big'));
+  const fam = sp.family || (curConfig && curConfig.families ? curConfig.families[0] : 'classic');
+  const cIdx = sp.colorIdx || 0;
+  const dir = isTop ? 'top' : 'bot';
+  const key = `${fam}_${cIdx}_${dir}_${sizeKey}`;
+  const spr = spikeCanvases[key] ||
+              spikeCanvases[`${fam}_0_${dir}_${sizeKey}`] ||
+              spikeCanvases[`${sizeKey}_${dir}`] ||
+              Object.values(spikeCanvases)[0];
 
   if (spr) {
     ctx.save();
-    // Soft shadow behind spike so it pops from background
-    ctx.shadowColor = 'rgba(15, 23, 42, 0.35)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetY = isTop ? 2 : -2;
-    if (isTop) {
-      ctx.drawImage(spr, x + 6 - 20, baseY - 4);
+    // 6. DEPTH: Thin soft dark shadow of spikes on rail (shadowColor rgba(0, 0, 0, 0.45), blur 3)
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetY = isTop ? 1 : -1;
+
+    if (slope !== 0) {
+      ctx.translate(x + 6, baseY);
+      ctx.rotate(slope);
+      ctx.drawImage(spr, -27, isTop ? -6 : -58);
     } else {
-      ctx.drawImage(spr, x + 6 - 20, baseY - 48);
+      if (isTop) {
+        ctx.drawImage(spr, x + 6 - 27, baseY - 6);
+      } else {
+        ctx.drawImage(spr, x + 6 - 27, baseY - 58);
+      }
     }
     ctx.restore();
+
+    // Soft tip glow pulsing slowly out of phase across the row
+    const pulse = 0.35 + 0.35 * Math.sin(gameTime * 2.5 + idx * 0.4);
+    if (pulse > 0.08) {
+      const glowColor = (curConfig && curConfig.glowColor) ? curConfig.glowColor : '#ff8a1f';
+      const tipY = baseY + (isTop ? sp.h : -sp.h);
+      const glowX = x + 6;
+      const glowR = Math.min(8, Math.max(4, sp.h * 0.22));
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(glowX, tipY, 0, glowX, tipY, glowR);
+      g.addColorStop(0, hexToRgba(glowColor, pulse));
+      g.addColorStop(0.5, hexToRgba(glowColor, pulse * 0.45));
+      g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(glowX, tipY, glowR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 }
 
@@ -5675,47 +7776,62 @@ function renderCarBody(drawWheelAngle = wheelRot) {
 function car(drawX = CAR_X) {
   const drawW = CAR_DRAW_W;
   const drawH = CAR_DRAW_H;
+  // Align bottom of tires to the exact same ground baseline as the original car (cy + 24)
+  const groundBaseline = cy + 24;
+  const carCenterY = groundBaseline - drawH / 2;
 
   // Soft dark ground shadow under the car tires
   ctx.save();
   ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
   ctx.beginPath();
-  ctx.ellipse(drawX, cy + drawH / 2 - 2, drawW * 0.42, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(drawX, groundBaseline - 2, drawW * 0.42, 4, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // Draw car always horizontal (perfectly straight, no rotation or tilt)
-  ctx.save();
-  ctx.translate(drawX, cy);
-
-  // Short soft cyan trail behind the car while thrust is held
-  if (hold && st === 'play' && finishRunStage === 'none' && !stopping) {
+  // Soft blue glow ellipse on the road or air below the car (alpha 0.25)
+  if (SHOW_FLAMES && flameIntensity > 0.01) {
     ctx.save();
-    const trailLen = drawW * 0.55;
-    const trailGrad = ctx.createLinearGradient(-drawW / 2 - trailLen, 0, -drawW / 2 + 6, 0);
-    trailGrad.addColorStop(0, 'rgba(6, 182, 212, 0)');
-    trailGrad.addColorStop(0.65, 'rgba(34, 211, 238, 0.32)');
-    trailGrad.addColorStop(1, 'rgba(165, 243, 252, 0.70)');
-    ctx.fillStyle = trailGrad;
+    ctx.globalCompositeOperation = 'lighter';
+    const glowY = carCenterY + drawH / 2 + 18;
+    const glowW = drawW * 0.36;
+    const glowH = 11;
+    const glowGrad = ctx.createRadialGradient(drawX - 2, glowY, 0, drawX - 2, glowY, glowW);
+    const alpha = 0.25 * flameIntensity;
+    glowGrad.addColorStop(0, `rgba(56, 189, 248, ${alpha})`);
+    glowGrad.addColorStop(0.5, `rgba(99, 102, 241, ${alpha * 0.5})`);
+    glowGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    ctx.fillStyle = glowGrad;
     ctx.beginPath();
-    ctx.moveTo(-drawW / 2 + 6, -drawH * 0.12);
-    ctx.lineTo(-drawW / 2 - trailLen, -2);
-    ctx.lineTo(-drawW / 2 - trailLen, 2);
-    ctx.lineTo(-drawW / 2 + 6, drawH * 0.20);
-    ctx.closePath();
+    ctx.ellipse(drawX - 2, glowY, glowW, glowH, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
+  // Draw car always horizontal (perfectly straight, no rotation or tilt)
+  ctx.save();
+  ctx.translate(drawX, carCenterY);
+
+  // Jet thruster flames under the car (additive blending)
+  if (SHOW_FLAMES && flameIntensity > 0.01) {
+    drawJetFlames(ctx, drawW, drawH, gameTime);
+  }
+
   if (trimmedCarCanvas) {
-    ctx.shadowColor = CAR_GLOW_COLOR;
-    ctx.shadowBlur = CAR_GLOW_BLUR;
-    ctx.shadowBlur = 0;
+    // Soft dark outline shadow so white body stays clear on bright backgrounds
+    ctx.shadowColor = CAR_SHADOW_COLOR;
+    ctx.shadowBlur = CAR_SHADOW_BLUR;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     ctx.drawImage(trimmedCarCanvas, -drawW / 2, -drawH / 2, drawW, drawH);
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
 
-    // Dynamic rotating sports wheels built from the car image
+    // Metal nozzle pods sliding out from under the body
+    if (SHOW_FLAMES && podDeploy > 0.01) {
+      drawThrusterPods(ctx, drawW, drawH);
+    }
+
+    // Dynamic rotating wheel rims copied from center of each wheel
     if (wheelSpritesReady && rearWheelSprite && frontWheelSprite) {
       try {
         const rearX = -drawW / 2 + drawW * WHEEL_REAR_X;
@@ -5723,31 +7839,6 @@ function car(drawX = CAR_X) {
         const wheelY = -drawH / 2 + drawH * WHEEL_Y;
         const rimR = drawW * WHEEL_SPIN_RADIUS;
         const rimD = rimR * 2;
-
-        // Clean dark wheel cavity behind rim
-        ctx.save();
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(rearX, wheelY, rimR + 0.8, 0, Math.PI * 2);
-        ctx.arc(frontX, wheelY, rimR + 0.8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Performance red brake caliper (stays static behind spinning spokes)
-        for (const wx of [rearX, frontX]) {
-          ctx.save();
-          ctx.translate(wx, wheelY);
-          const calAngle = -Math.PI * 0.62;
-          ctx.rotate(calAngle);
-          ctx.translate(rimR * 0.72, 0);
-          ctx.fillStyle = '#dc2626';
-          ctx.fillRect(-rimR * 0.22, -rimR * 0.16, rimR * 0.44, rimR * 0.32);
-          ctx.fillStyle = '#f87171';
-          ctx.fillRect(-rimR * 0.22, -rimR * 0.16, rimR * 0.44, rimR * 0.08);
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(-rimR * 0.10, -rimR * 0.04, rimR * 0.20, rimR * 0.08);
-          ctx.restore();
-        }
-        ctx.restore();
 
         // Draw rear rim sprite concentric to axle (spins only the rim; tire & body arch stay static)
         ctx.save();
@@ -5763,7 +7854,7 @@ function car(drawX = CAR_X) {
         ctx.drawImage(frontWheelSprite, -rimR, -rimR, rimD, rimD);
         ctx.restore();
 
-        // Motion blur at high spin speed: draw wheel a second time rotated by a small extra angle with alpha 0.35
+        // Motion blur at high spin speed
         const isHighSpin = (Math.abs(currentAngularSpeed) > 12) || (thrustSpinMultiplier > 1.25);
         if (isHighSpin) {
           const blurOffset = 0.08 * (currentAngularSpeed >= 0 ? 1 : -1);
@@ -5786,17 +7877,16 @@ function car(drawX = CAR_X) {
         if (SHOW_WHEEL_DEBUG) {
           ctx.save();
           ctx.lineWidth = 1.2;
-          // Green: spinning rim boundary
           ctx.strokeStyle = '#00ff00';
+          // Rim circles
           ctx.beginPath();
           ctx.arc(rearX, wheelY, rimR, 0, Math.PI * 2);
           ctx.stroke();
           ctx.beginPath();
           ctx.arc(frontX, wheelY, rimR, 0, Math.PI * 2);
           ctx.stroke();
-          // Yellow: outer tire boundary
+          // Tire circles
           const tireR = drawW * WHEEL_RADIUS;
-          ctx.strokeStyle = '#facc15';
           ctx.beginPath();
           ctx.arc(rearX, wheelY, tireR, 0, Math.PI * 2);
           ctx.stroke();
@@ -5806,12 +7896,14 @@ function car(drawX = CAR_X) {
           ctx.restore();
         }
       } catch (err) {
-        // Fallback to static car image (already drawn via trimmedCarCanvas above)
         console.warn('Failed to render wheel sprites:', err);
       }
     }
   } else {
     // Fallback to drawn car if image fails to load
+    if (SHOW_FLAMES && podDeploy > 0.01) {
+      drawThrusterPods(ctx, drawW, drawH);
+    }
     ctx.scale(CAR_SCALE, CAR_SCALE);
     renderCarBody(wheelRot);
   }
@@ -6155,9 +8247,10 @@ function step(dt) {
         }
       }
 
-      // Safety fallback: if finish road has passed under car front and car is still in air,
-      // ease car down gently to the road in about 0.6 seconds.
-      if (wx >= FINISH_ROAD_X && cy < CAR_REST_Y) {
+      // Safety fallback only if needed: if the road has passed under the car's front (near finish line)
+      // and the car is still in the air, then, and only then, ease the car down gently to the road in about 0.6 seconds.
+      const roadPassedFront = (wx >= finishLineWorldX - 100);
+      if (roadPassedFront && cy < CAR_REST_Y) {
         if (safetyLandingTimer === 0) {
           safetyLandingStartY = cy;
         }
@@ -6169,7 +8262,7 @@ function step(dt) {
           cy = CAR_REST_Y;
           vy = 0;
         }
-      } else if (wx < FINISH_ROAD_X) {
+      } else if (!roadPassedFront) {
         safetyLandingTimer = 0;
       }
 
@@ -6324,25 +8417,43 @@ function step(dt) {
       }
     }
 
-    // Wheel thruster smoke during normal flight (no smoke during landing or driving on road)
-    if (hold && isCarInAir && st === 'play' && !autoLanding && !stopping) {
-      const drawW = CAR_DRAW_W;
-      const drawH = CAR_DRAW_H;
-      const rearWheelOx = -drawW / 2 + drawW * WHEEL_REAR_X;
-      const frontWheelOx = -drawW / 2 + drawW * WHEEL_FRONT_X;
-      const smokeY = cy + drawH / 2;
-      for (const ox of [rearWheelOx, frontWheelOx]) {
-        parts.push({
-          x: CAR_X + ox,
-          y: smokeY,
-          vx: rnd(-3, 3) - sp * 0.15,
-          vy: rnd(140, 230),
-          l: 0,
-          m: rnd(0.3, 0.45),
-          size: rnd(4, 7) * (CAR_SCALE * 0.6)
-        });
+    // Jet thrusters and flames (replaces white smoke puffs)
+    const isThrustFlying = (hold && isCarInAir && st === 'play' && !autoLanding && !stopping);
+    if (isThrustFlying) {
+      podDeploy = Math.min(1.0, podDeploy + dt / POD_SLIDE_TIME);
+      flameIntensity = Math.min(1.0, flameIntensity + dt / 0.12);
+    } else {
+      podDeploy = Math.max(0.0, podDeploy - dt / POD_SLIDE_TIME);
+      flameIntensity = Math.max(0.0, flameIntensity - dt / FLAME_FADE_OUT_TIME);
+    }
+    // Hard check: never allow flames or sparks when car is resting or driving on the road
+    if (isCarOnRoad) {
+      flameIntensity = 0.0;
+      podDeploy = Math.max(0.0, podDeploy - dt / POD_SLIDE_TIME);
+    }
+
+    if (SHOW_FLAMES && flameIntensity > 0.05 && isCarInAir) {
+      sparkSpawnTimer += dt;
+      if (sparkSpawnTimer >= 0.04) {
+        sparkSpawnTimer -= 0.04;
+        const drawW = CAR_DRAW_W;
+        const drawH = CAR_DRAW_H;
+        const carCenterY = (cy + 24) - drawH / 2;
+        const nIdx = Math.floor(Math.random() * NOZZLE_X.length);
+        const nx = -drawW / 2 + drawW * NOZZLE_X[nIdx];
+        const baseNozzleY = -drawH / 2 + drawH * NOZZLE_Y;
+        const podH = drawH * 0.05;
+        const nozzleLipY = carCenterY + baseNozzleY + podH * podDeploy;
+        const flameLen = NOZZLE_LEN[nIdx] * drawH * (0.35 + 0.65 * flameIntensity);
+        spawnSpark(CAR_X + nx, nozzleLipY, flameLen, sp);
       }
     }
+    updateSparks(dt, sp);
+    if (boostTimer > 0) {
+      boostTimer = Math.max(0, boostTimer - dt);
+    }
+    updateHazardParticles(dt);
+    updateFloatingTexts(dt);
     gameTime += dt;
     for (const s of segs) {
       if (s.moving) {
@@ -6353,29 +8464,160 @@ function step(dt) {
         s.curTop = s.top;
         s.curBot = s.bot;
       }
+
+      // Update interactive hazard states (falling spikes, boost rings, air currents)
+      if (s.obstacles && s.obstacles.length > 0) {
+        for (const obs of s.obstacles) {
+          if (obs.type === 'falling_spike') {
+            if (obs.state === 'idle') {
+              const distToSpike = obs.x - wx;
+              if (distToSpike > 0 && distToSpike <= sp * 1.5 && (!activeFallingSpike || activeFallingSpike === obs) && boostTimer <= 1.0) {
+                activeFallingSpike = obs;
+                obs.state = 'warning';
+                obs.warnTimer = 0.7;
+              }
+            } else if (obs.state === 'warning') {
+              obs.warnTimer -= dt;
+              obs.shake = Math.sin((0.7 - obs.warnTimer) * 45) * 2.2;
+              if (obs.warnTimer <= 0) {
+                obs.state = 'falling';
+                obs.velY = 0;
+                obs.shake = 0;
+              }
+            } else if (obs.state === 'falling') {
+              obs.velY += 1200 * dt;
+              obs.curY += obs.velY * dt;
+              if (obs.curY >= obs.maxDepth) {
+                obs.state = 'shattered';
+                spawnHazardShards(obs.x, obs.curY, (curConfig && curConfig.accentColor) || '#cbd5e1');
+                if (activeFallingSpike === obs) activeFallingSpike = null;
+              }
+            }
+          } else if (obs.type === 'boost_ring' && !obs.collected) {
+            if (Math.abs(wx - obs.x) < 26 && Math.abs(cy - obs.y) < obs.radius + 16) {
+              obs.collected = true;
+              boostTimer = 2.0;
+              playBoostSound();
+              spawnFloatingText('BOOST!', CAR_X, cy - 28, '#38bdf8');
+              spawnHazardShards(obs.x, obs.y, '#38bdf8');
+            }
+          } else if (obs.type === 'air_current') {
+            if (wx >= obs.x && wx <= obs.x + obs.w && cy >= obs.yTop - 20 && cy <= obs.yBot + 20) {
+              vy += obs.pushDir * obs.strength * dt;
+            }
+          }
+        }
+      }
     }
 
     for (const s of segs) {
       // Crash cannot happen after the last spike or during finish run
       if (stopping || autoLanding || wx >= TUNNEL_END_X) break;
-      const curTop = (s.curTop !== undefined) ? s.curTop : s.top;
-      const curBot = (s.curBot !== undefined) ? s.curBot : s.bot;
-      if (wx + HITBOX_HALF_W > s.x && wx - HITBOX_HALF_W < s.x + s.w && !s.isOpen) {
-        if (cy - HITBOX_TOP_OFFSET < curTop - 18 || cy + HITBOX_BOT_OFFSET > curBot + 18) { die(); break; }
-        let hit = false;
-        const count = s.topSpikes ? s.topSpikes.length : 0;
-        for (let i = 0; i < count; i++) {
-          const spX = s.x + i * 12;
-          if (wx + HITBOX_HALF_W > spX && wx - HITBOX_HALF_W < spX + 12) {
-            const topTip = (curTop - 18) + s.topSpikes[i].h;
-            const botTip = (curBot + 18) - s.botSpikes[i].h;
-            if ((cy - HITBOX_TOP_OFFSET) < topTip - 6 || (cy + HITBOX_BOT_OFFSET) > botTip + 6) {
-              hit = true;
-              break;
+
+      // Obstacles collision check (gates, stalactites, stalagmites, floating blocks, hazards)
+      if (s.obstacles && s.obstacles.length > 0) {
+        let obsHit = false;
+        for (const obs of s.obstacles) {
+          const obsW = obs.w || (obs.radius ? obs.radius * 2 : 24);
+          if (wx + HITBOX_HALF_W > obs.x - obsW / 2 && wx - HITBOX_HALF_W < obs.x + obsW / 2) {
+            if (obs.type === 'gate') {
+              if (cy - HITBOX_TOP_OFFSET < obs.gapTop - 4 || cy + HITBOX_BOT_OFFSET > obs.gapBot + 4) {
+                obsHit = true; break;
+              }
+            } else if (obs.type === 'stalactite') {
+              if (cy - HITBOX_TOP_OFFSET < obs.tipY - 4) {
+                obsHit = true; break;
+              }
+            } else if (obs.type === 'stalagmite') {
+              if (cy + HITBOX_BOT_OFFSET > obs.tipY + 4) {
+                obsHit = true; break;
+              }
+            } else if (obs.type === 'floating_block') {
+              if (cy - HITBOX_TOP_OFFSET < obs.y + obs.h - 4 && cy + HITBOX_BOT_OFFSET > obs.y + 4) {
+                obsHit = true; break;
+              }
+            } else if (obs.type === 'saw_blade') {
+              const slide = (obs.slideDist || 0) * Math.sin((gameTime + (obs.slidePhase || 0)) * 2 * Math.PI / (obs.slidePeriod || 3.0));
+              const curX = obs.x + slide;
+              const cxClamped = Math.max(wx - HITBOX_HALF_W, Math.min(curX, wx + HITBOX_HALF_W));
+              const cyClamped = Math.max(cy - HITBOX_TOP_OFFSET, Math.min(obs.y, cy + HITBOX_BOT_OFFSET));
+              const d2 = (curX - cxClamped) ** 2 + (obs.y - cyClamped) ** 2;
+              if (d2 < (obs.radius * 0.9) ** 2) {
+                obsHit = true; break;
+              }
+            } else if (obs.type === 'falling_spike') {
+              if (obs.state === 'falling') {
+                if (cy + HITBOX_BOT_OFFSET > obs.curY && cy - HITBOX_TOP_OFFSET < obs.curY + (obs.h || 28) - 6) {
+                  obsHit = true; break;
+                }
+              }
+            } else if (obs.type === 'laser_gate') {
+              const t = (gameTime + obs.phase) % 1.4;
+              if (t >= 0.6 && boostTimer <= 1.0) {
+                if (cy >= obs.topY && cy <= obs.botY) {
+                  obsHit = true; break;
+                }
+              }
+            } else if (obs.type === 'pendulum') {
+              const theta = obs.maxAngle * Math.sin((gameTime + obs.phase) * 2 * Math.PI / obs.period);
+              const bx = obs.anchorX + obs.length * Math.sin(theta);
+              const by = obs.anchorY + obs.length * Math.cos(theta);
+              const cxClamped = Math.max(wx - HITBOX_HALF_W, Math.min(bx, wx + HITBOX_HALF_W));
+              const cyClamped = Math.max(cy - HITBOX_TOP_OFFSET, Math.min(by, cy + HITBOX_BOT_OFFSET));
+              const d2 = (bx - cxClamped) ** 2 + (by - cyClamped) ** 2;
+              if (d2 < (obs.radius * 0.9) ** 2) {
+                obsHit = true; break;
+              }
             }
           }
         }
-        if (hit) { die(); break; }
+        if (obsHit) { die(); break; }
+      }
+
+      // Rails and spikes collision check
+      const curTop = (s.curTop !== undefined) ? s.curTop : s.top;
+      const curBot = (s.curBot !== undefined) ? s.curBot : s.bot;
+      if (wx + HITBOX_HALF_W > s.x && wx - HITBOX_HALF_W < s.x + s.w && !s.isOpen) {
+        if (s.isSlanted && s.top2 !== undefined && s.bot2 !== undefined) {
+          const fracMid = Math.max(0, Math.min(1, (wx - s.x) / s.w));
+          const effTop = curTop + (s.top2 - curTop) * fracMid;
+          const effBot = curBot + (s.bot2 - curBot) * fracMid;
+          if (cy - HITBOX_TOP_OFFSET < effTop - 18 || cy + HITBOX_BOT_OFFSET > effBot + 18) {
+            die(); break;
+          }
+          let hit = false;
+          const count = s.topSpikes ? s.topSpikes.length : 0;
+          for (let i = 0; i < count; i++) {
+            const spX = s.x + i * 12;
+            if (wx + HITBOX_HALF_W > spX && wx - HITBOX_HALF_W < spX + 12) {
+              const spFrac = Math.max(0, Math.min(1, (spX + 6 - s.x) / s.w));
+              const localTop = curTop + (s.top2 - curTop) * spFrac;
+              const localBot = curBot + (s.bot2 - curBot) * spFrac;
+              const topTip = (localTop - 18) + s.topSpikes[i].h;
+              const botTip = (localBot + 18) - s.botSpikes[i].h;
+              if ((cy - HITBOX_TOP_OFFSET) < topTip - 6 || (cy + HITBOX_BOT_OFFSET) > botTip + 6) {
+                hit = true; break;
+              }
+            }
+          }
+          if (hit) { die(); break; }
+        } else {
+          if (cy - HITBOX_TOP_OFFSET < curTop - 18 || cy + HITBOX_BOT_OFFSET > curBot + 18) { die(); break; }
+          let hit = false;
+          const count = s.topSpikes ? s.topSpikes.length : 0;
+          for (let i = 0; i < count; i++) {
+            const spX = s.x + i * 12;
+            if (wx + HITBOX_HALF_W > spX && wx - HITBOX_HALF_W < spX + 12) {
+              const topTip = (curTop - 18) + s.topSpikes[i].h;
+              const botTip = (curBot + 18) - s.botSpikes[i].h;
+              if ((cy - HITBOX_TOP_OFFSET) < topTip - 6 || (cy + HITBOX_BOT_OFFSET) > botTip + 6) {
+                hit = true;
+                break;
+              }
+            }
+          }
+          if (hit) { die(); break; }
+        }
       }
     }
     if (stopping) {
@@ -6472,14 +8714,15 @@ function drawLoadingScreen() {
     }
     ctx.restore();
 
-    // Yellow sports car image
+    // White futuristic coupe car image
     if (trimmedCarCanvas) {
-      ctx.shadowColor = 'rgba(15, 23, 62, 0.35)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetY = 2;
+      ctx.shadowColor = CAR_SHADOW_COLOR;
+      ctx.shadowBlur = CAR_SHADOW_BLUR;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
       ctx.drawImage(trimmedCarCanvas, -loadW / 2, -loadH / 2, loadW, loadH);
 
-      // Rotating sports wheels on loading screen
+      // Rotating rim sprites on loading screen
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
@@ -6488,25 +8731,45 @@ function drawLoadingScreen() {
         const loadRearX = -loadW / 2 + loadW * WHEEL_REAR_X;
         const loadFrontX = -loadW / 2 + loadW * WHEEL_FRONT_X;
         const loadWheelY = -loadH / 2 + loadH * WHEEL_Y;
-        const loadWheelR = loadW * WHEEL_RADIUS;
-        const loadWheelD = loadWheelR * 2;
+        const loadRimR = loadW * WHEEL_SPIN_RADIUS;
+        const loadRimD = loadRimR * 2;
 
         ctx.save();
         ctx.translate(loadRearX, loadWheelY);
         ctx.rotate(loadingWheelRot);
-        ctx.drawImage(rearWheelSprite, -loadWheelR, -loadWheelR, loadWheelD, loadWheelD);
+        ctx.drawImage(rearWheelSprite, -loadRimR, -loadRimR, loadRimD, loadRimD);
         ctx.restore();
 
         ctx.save();
         ctx.translate(loadFrontX, loadWheelY);
         ctx.rotate(loadingWheelRot);
-        ctx.drawImage(frontWheelSprite, -loadWheelR, -loadWheelR, loadWheelD, loadWheelD);
+        ctx.drawImage(frontWheelSprite, -loadRimR, -loadRimR, loadRimD, loadRimD);
         ctx.restore();
+
+        if (SHOW_WHEEL_DEBUG) {
+          ctx.save();
+          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = '#00ff00';
+          ctx.beginPath();
+          ctx.arc(loadRearX, loadWheelY, loadRimR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(loadFrontX, loadWheelY, loadRimR, 0, Math.PI * 2);
+          ctx.stroke();
+          const loadTireR = loadW * WHEEL_RADIUS;
+          ctx.beginPath();
+          ctx.arc(loadRearX, loadWheelY, loadTireR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(loadFrontX, loadWheelY, loadTireR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
       } else {
-        const loadRearX = -loadW / 2 + loadW * 0.1843;
-        const loadFrontX = -loadW / 2 + loadW * 0.8190;
-        const loadWheelY = -loadH / 2 + loadH * 0.7026;
-        const loadWheelR = loadH * 0.2908;
+        const loadRearX = -loadW / 2 + loadW * WHEEL_REAR_X;
+        const loadFrontX = -loadW / 2 + loadW * WHEEL_FRONT_X;
+        const loadWheelY = -loadH / 2 + loadH * WHEEL_Y;
+        const loadWheelR = loadW * WHEEL_SPIN_RADIUS;
 
         drawSportsWheel(loadRearX, loadWheelY, loadWheelR, loadingWheelRot);
         drawSportsWheel(loadFrontX, loadWheelY, loadWheelR, loadingWheelRot);
@@ -6671,8 +8934,8 @@ function drawSettingsPopup() {
   ctx.fillStyle = 'rgba(10, 15, 25, 0.65)';
   ctx.fillRect(0, 0, W, H);
 
-  const cw = 290, ch = 440;
-  const cx = W / 2 - cw / 2, cy = H / 2 - ch / 2 - 10;
+  const cw = 290, ch = 456;
+  const cx = W / 2 - cw / 2, cy = H / 2 - ch / 2 - 8;
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
   ctx.shadowBlur = 18;
@@ -6802,7 +9065,7 @@ function drawSettingsPopup() {
     const isResetPressed = (activePress === 'ask_reset_progress');
     drawGlossyButton(rBtnX, rBtnY, rBtnW, rBtnH, BUTTON_THEMES.red, 'Reset progress', null, isResetPressed, 13);
     const maxHint = (highestLevel > 1) ? `Highest unlocked: Level ${highestLevel}` : 'Tap CHANGE to switch rims';
-    drawGlossyText(maxHint, W / 2, cy + ch - 16, 11.5, 'center', '#64748b', '#0f172a', 2.2);
+    drawGlossyText(maxHint, W / 2, cy + ch - 24, 11.5, 'center', '#64748b', '#0f172a', 2.2);
   } else {
     drawGlossyText('Are you sure?', W / 2, cy + 330, 15, 'center', '#ef4444', '#450a0a', 3.5);
     const confH = 32;
@@ -6814,8 +9077,19 @@ function drawSettingsPopup() {
     const isNoPressed = (activePress === 'cancel_reset_progress');
     drawGlossyButton(noX, noY, noW, confH, BUTTON_THEMES.gray, 'Cancel', null, isNoPressed, 12);
 
-    drawGlossyText('Resets level progress to 1', W / 2, cy + ch - 14, 11, 'center', '#94a3b8', '#0f172a', 2.0);
+    drawGlossyText('Resets level progress to 1', W / 2, cy + ch - 24, 11, 'center', '#94a3b8', '#0f172a', 2.0);
   }
+
+  // Debug Line: Level N: module list
+  ctx.save();
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '8.5px sans-serif';
+  ctx.textAlign = 'center';
+  const modDbg = (currentLevelModuleNames && currentLevelModuleNames.length > 0)
+    ? currentLevelModuleNames.join(', ')
+    : 'Calm Cruise';
+  ctx.fillText(`Level ${curLevel}: ${modDbg}`, W / 2, cy + ch - 8);
+  ctx.restore();
 
   ctx.restore();
 }
@@ -7090,6 +9364,7 @@ function drawGameContent(dt = 0.016) {
     const s = segs[i];
     const x = s.x - cam;
     if (!s.isOpen) drawWall(s, x);
+    if (s.obstacles) drawObstacles(s, x, cfg);
 
     const curTop = (s.curTop !== undefined) ? s.curTop : s.top;
     const curBot = (s.curBot !== undefined) ? s.curBot : s.bot;
@@ -7097,12 +9372,12 @@ function drawGameContent(dt = 0.016) {
     // Connected Rails between neighboring segments (visual only, no collision)
     if (i < segs.length - 1) {
       const sNext = segs[i + 1];
-      if (!s.isOpen && !sNext.isOpen) {
+      if (!s.isOpen && !sNext.isOpen && !s.isSlanted && !sNext.isSlanted) {
         const nextTop = (sNext.curTop !== undefined) ? sNext.curTop : sNext.top;
         const nextBot = (sNext.curBot !== undefined) ? sNext.curBot : sNext.bot;
         const seamX = (s.x + s.w) - cam;
         if (Math.abs(curTop - nextTop) > 1) {
-          drawVerticalRailConnector(seamX, curTop - 28, nextTop - 28, cfg);
+          drawVerticalRailConnector(seamX, curTop - 18 - RAIL_THICKNESS, nextTop - 18 - RAIL_THICKNESS, cfg);
         }
         if (Math.abs(curBot - nextBot) > 1) {
           drawVerticalRailConnector(seamX, curBot + 18, nextBot + 18, cfg);
@@ -7113,13 +9388,23 @@ function drawGameContent(dt = 0.016) {
     if (s.topSpikes) {
       const count = s.topSpikes.length;
       for (let j = 0; j < count; j++) {
-        drawSpike(x + j * 12, curTop - 18, true, s.topSpikes[j], j);
+        let baseY = curTop - 18;
+        if (s.isSlanted && s.top2 !== undefined) {
+          const t = Math.min(1, (j * 12) / s.w);
+          baseY = (curTop + (s.top2 - curTop) * t) - 18;
+        }
+        drawSpike(x + j * 12, baseY, true, s.topSpikes[j], j, s.slope || 0);
       }
     }
     if (s.botSpikes) {
       const count = s.botSpikes.length;
       for (let j = 0; j < count; j++) {
-        drawSpike(x + j * 12, curBot + 18, false, s.botSpikes[j], j);
+        let baseY = curBot + 18;
+        if (s.isSlanted && s.bot2 !== undefined) {
+          const t = Math.min(1, (j * 12) / s.w);
+          baseY = (curBot + (s.bot2 - curBot) * t) + 18;
+        }
+        drawSpike(x + j * 12, baseY, false, s.botSpikes[j], j, s.slope || 0);
       }
     }
   }
@@ -7212,6 +9497,12 @@ function drawGameContent(dt = 0.016) {
     car(carDrawX);
   }
 
+  // Jet thruster sparks (falling down and drifting back with the world)
+  if (SHOW_FLAMES) {
+    drawSparks(ctx);
+  }
+  drawHazardParticles(ctx);
+
   // Thin horizontal speed lines in the stage's accent color
   const curStage = getStage(curLevel);
   updateAndDrawSpeedLines(dt, speed(), curStage);
@@ -7226,12 +9517,14 @@ function drawGameContent(dt = 0.016) {
       drawConfetti();
     }
     drawHUD();
+    drawFloatingTexts();
     if (SHOW_DEBUG) {
       drawDebugOverlay();
     }
 
   } else if (st === 'transition') {
     drawHUD();
+    drawFloatingTexts();
     let cardAlpha = 1;
     if (transitionTimer < 0.35) cardAlpha = transitionTimer / 0.35;
     else if (transitionTimer > 1.35) cardAlpha = Math.max(0, 1 - (transitionTimer - 1.35) / 0.4);
@@ -7241,6 +9534,13 @@ function drawGameContent(dt = 0.016) {
     const cardText = getLevelTitleCardText(curLevel);
     const ribbonW = 270;
     drawRibbonHeader(W / 2, 210 + topInset * 0.5, ribbonW, 48, cardText, BUTTON_THEMES.blue, 2);
+
+    // New hazard introduction line (Requirement 7)
+    const stageNum = getStageNumber(curLevel);
+    const newHazardText = STAGE_NEW_HAZARDS[stageNum];
+    if (newHazardText && getLevelInStage(curLevel) === 1) {
+      drawGlossyText(newHazardText, W / 2, 252 + topInset * 0.5, 12.5, 'center', '#fde047', '#0f172a', 3.2);
+    }
     ctx.restore();
 
     if (transitionTimer < 0.25) {
@@ -7262,6 +9562,11 @@ function drawGameContent(dt = 0.016) {
     drawGlossyText('THORN RUSH', W / 2, 120 + topInset * 0.6, 46, 'center', '#ffffff', '#0f172a', 8);
     const menuStageText = getStageMenuText(curLevel);
     drawGlossyText(menuStageText, W / 2, 165 + topInset * 0.6, 18, 'center', '#ffffff', '#0f172a', 4.5);
+    const stageNum = getStageNumber(curLevel);
+    const newHazardText = STAGE_NEW_HAZARDS[stageNum];
+    if (newHazardText && getLevelInStage(curLevel) === 1) {
+      drawGlossyText(newHazardText, W / 2, 192 + topInset * 0.6, 12, 'center', '#fde047', '#0f172a', 3.0);
+    }
 
     // Bottom Row: moved up by botInset
     const btnY = H - 70 - botInset;
@@ -7645,6 +9950,7 @@ window.addEventListener('resize', () => {
   prerenderVignette();
   prerenderStageBackgrounds();
   prerenderAllStageSpikes();
+  prerenderHazardSprites();
   prerenderCoinFrames();
   initSpeedLines();
   initStageParticles();
@@ -7667,6 +9973,7 @@ bgCrossFadeTimer = 0;
 prerenderVignette();
 prerenderStageBackgrounds();
 prerenderAllStageSpikes();
+prerenderHazardSprites();
 prerenderCoinFrames();
 initSpeedLines();
 initStageParticles();
